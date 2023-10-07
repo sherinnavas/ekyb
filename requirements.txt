@@ -42,8 +42,8 @@ hstspreload
 httpx
 httpcore
 huggingface-hub==0.16.4
-hyperframe==5.2.0
-idna==2.10
+hyperframe
+idna
 importlib-metadata==6.8.0
 insta-scrape==2.1.2
 Jinja2==3.1.2
