@@ -406,33 +406,33 @@ def cr_entry_page():
                 expiry_date_hijri = ocr_result.get('expiry_date_hijri')
                 location = ocr_result.get('location')
 
-                non_optional_keys = ["cr_number", "business_name", "business_owner_1"]
-                empty_string_keys = [key for key, value in ocr_result.items() if key in non_optional_keys and value == '']
+            non_optional_keys = ["cr_number", "business_name", "business_owner_1"]
+            empty_string_keys = [key for key, value in ocr_result.items() if key in non_optional_keys and value == '']
 
-                if empty_string_keys:
-                    st.error("Please upload a Valid CR Document PDF")
-                else:
-                    st.title("Business Details:")
-                    st.success(f"CR Number: {cr_number} ✅")
-                    st.success(f"Business Name: {business_name} ✅")
-                    st.success(f"Business Owner: {business_owner_1} ✅")
-                    st.success(f"CR Expiry Date: {expiry_date_hijri} ✅")
-                    st.success(f"Business Address: {location} ✅")
+            if empty_string_keys:
+                st.error("Please upload a Valid CR Document PDF")
+            else:
+                st.title("Business Details:")
+                st.success(f"CR Number: {cr_number} ✅")
+                st.success(f"Business Name: {business_name} ✅")
+                st.success(f"Business Owner: {business_owner_1} ✅")
+                st.success(f"CR Expiry Date: {expiry_date_hijri} ✅")
+                st.success(f"Business Address: {location} ✅")
 
-                    # cr_number = ocr_result['cr_number']
-                    # result = extract_business_details_and_ping_wathq(ocr_result)
+                # cr_number = ocr_result['cr_number']
+                # result = extract_business_details_and_ping_wathq(ocr_result)
 
-                    result = {}
+                result = {}
 
-                    st.write(result)
+                st.write(result)
 
-                    st.session_state.next_button_enabled = True
-                    st.session_state.next_page = "idv_page"
+                st.session_state.next_button_enabled = True
+                st.session_state.next_page = "idv_page"
 
-                if st.session_state.get("next_button_enabled"):
-                    if st.button("Next"):
-                        st.session_state.idv_response = True
-                # st.session_state.next_page = "similar_web_page"
+            if st.session_state.get("next_button_enabled"):
+                if st.button("Next"):
+                    st.session_state.idv_response = True
+            # st.session_state.next_page = "similar_web_page"
 
             # Add a link to go back to the previous page
             # st.markdown("Go back to [C/R Entry Page](?previous_page=cr_entry)")
