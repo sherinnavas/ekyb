@@ -23,6 +23,8 @@ import torch
 import matplotlib.pyplot as plt
 from urllib.parse import urlparse
 from bs4 import BeautifulSoup
+import time
+from id_upload import extract_id_details
 # from wordcloud import WordCloud
 # import numpy as np
 
@@ -429,9 +431,6 @@ def display_details_in_table(details, id_number):
     df = pd.DataFrame(details, index=[f"ID{id_number}"])
     st.table(df)
 
-def extract_id_details(uploaded_id):
-    return {"Name": "John Doe", "DOB": "01/01/1980", "Address": "123 Main St"}
-
 def idv_page():
     st.title("Business Shareholders Verification")
     uploaded_ids = []
@@ -442,9 +441,10 @@ def idv_page():
     for i in range(num_ids_to_upload):
         uploaded_id = st.file_uploader(f"Upload Back side of ID {i+1}", type=["jpg", "png", "pdf"])
         if uploaded_id:
-            # Dummy function to extract details (replace with actual extraction logic)
-            extracted_details = extract_id_details(uploaded_id)
-            uploaded_ids.append(extracted_details)
+            uploaded_id_content = uploaded_id.read()
+            with st.spinner("Fetching data..."):
+                extracted_details = extract_id_details(uploaded_id_content)
+                uploaded_ids.append(extracted_details)
 
     st.session_state.next_button_enabled = len(uploaded_ids) == num_ids_to_upload
     if st.session_state.get("next_button_enabled"):
@@ -458,7 +458,6 @@ def idv_page():
             st.subheader(f"Details from ID {i}")
             display_details_in_table(id_data, i)
             
-# TODO - use this in address verification
 def verify_address(address):
     endpoint = "https://maps.googleapis.com/maps/api/geocode/json"
     api_key = "AIzaSyC3jF85Z6qgAEBwqwCdP8j_YM_XQcvEH-s"
@@ -824,7 +823,36 @@ def thm_verification():
             st.session_state.world_check = True
 
 def world_check():
-    st.title("World Check")
+    st.title("World Check Results")
+
+    container = st.empty()
+    container.markdown(
+        """
+        <div style="display: flex; justify-content: center; align-items: center; height: 200px;">
+            <div>
+                <h3>Loading...</h3>
+                <p>Please wait while the process completes.</p>
+                <st.spinner></st.spinner>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    time.sleep(3)
+
+    container.empty()
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.success("AML")
+        st.success("PEP")
+        st.success("Sanctions")
+
+    with col2:
+        for _ in range(3):
+            st.markdown('<p style="font-size:24px; padding-top:16px">✅</p>', unsafe_allow_html=True)
+
 
 def navigate():
     if st.session_state.next_page == "cr_entry":
