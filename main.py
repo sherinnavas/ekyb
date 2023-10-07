@@ -115,7 +115,7 @@ def twitter_scrape(business_name):
     # subprocess.run(command2)
 
     # command = f'twscrape search "{business_name} since:2023-08-01 until:2023-08-29" --raw'
-    command = f'twscrape search "nymcard since:2023-08-01 until:2023-08-29" --raw'
+    command = f'twscrape search "{business_name} since:2023-08-01 until:2023-08-29" --raw'
     print(f"running command: {command}")
     try:
         result = subprocess.run(
@@ -134,7 +134,6 @@ def twitter_scrape(business_name):
         else:
             try:
                 response_json = json.loads(result.stdout)
-                st.write(response_json)
                 tweet_list = []
 
                 for entry in response_json.get("data", {}).get("search_by_raw_query", {}).get("search_timeline", {}).get("timeline", {}).get("instructions", []):
