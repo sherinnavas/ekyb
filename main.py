@@ -823,8 +823,6 @@ def sentiment_scrape():
             google_reviews_list = google_reviews_scrape(company_name)
 
             max_len = max(len(tweet_list), len(ig_post_list), len(google_reviews_list))
-            if max_len > 3:
-                max_len = 3
             
             tweet_list.extend([''] * (max_len - len(tweet_list)))
             ig_post_list.extend([''] * (max_len - len(ig_post_list)))
@@ -832,7 +830,7 @@ def sentiment_scrape():
 
             with st.expander(f"Extracted Data for {company_name}"):
                 df = pd.DataFrame({'Google Reviews': google_reviews_list, 'Tweets': tweet_list, 'Instagram': ig_post_list})
-                html_table = df.to_html(index=False, header=True)
+                html_table = df.head(3).to_html(index=False, header=True)
                 st.markdown(html_table, unsafe_allow_html=True)
 
             all_tweet_texts = " ".join(tweet_list)
