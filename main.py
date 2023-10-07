@@ -901,12 +901,12 @@ def sentiment_scrape():
 
 
 def thm_verification():
+    st.title("Fraud Analysis")
     with st.spinner("Identifying Device.."):
         time.sleep(1)
 
     with st.spinner("Fetching Results..."):
         time.sleep(1)
-        st.title("Fraud Analysis")
         if st.button("Get Analysis"):
             col1, col2 = st.columns(2)
             with col1:
@@ -939,24 +939,9 @@ def thm_verification():
 def world_check():
     st.title("World Check Results")
 
-    container = st.empty()
-    container.markdown(
-        """
-        <div style="display: flex; justify-content: center; align-items: center; height: 200px;">
-            <div>
-                <h3>Loading...</h3>
-                <p>Please wait while the process completes.</p>
-                <st.spinner></st.spinner>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-    time.sleep(3)
-
-    container.empty()
-
+    with st.spinner("Extracting Results.."):
+        time.sleep(2)
+    
     col1, col2 = st.columns(2)
     with col1:
         st.success("AML")
