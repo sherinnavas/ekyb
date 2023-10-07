@@ -9,11 +9,10 @@ import io
 import fitz
 from PIL import Image
 import re
-import matplotlib.pyplot as plt
 import plotly.express as px
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
-from constants import WEB_ANALYSIS_DATA, THM_RESPONSE
+from constants import WEB_ANALYSIS_DATA, THM_RESPONSE, WEB_AVERAGE_DURATION_DATA
 import subprocess
 import json
 import pandas as pd
@@ -21,6 +20,7 @@ from transformers import BertTokenizer, BertForSequenceClassification
 import torch
 # from textblob import TextBlob
 import matplotlib.pyplot as plt
+from rapidfuzz import fuzz
 from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 import time
@@ -114,7 +114,8 @@ def twitter_scrape(business_name):
     # subprocess.run(command1)
     # subprocess.run(command2)
 
-    command = f'twscrape search "{business_name} since:2023-08-01 until:2023-08-29" --raw'
+    # command = f'twscrape search "{business_name} since:2023-08-01 until:2023-08-29" --raw'
+    command = f'twscrape search "nymcard since:2023-08-01 until:2023-08-29" --raw'
     print(f"running command: {command}")
     try:
         result = subprocess.run(
@@ -310,7 +311,15 @@ def get_response_from_wathq(cr_number):
     try:
         response = requests.get(url, headers=headers)
         data = response.json()
-        return data
+        wathq_parsed_response = {
+            "cr_number": data["crNumber"],
+            "business_name": data["crName"],
+            "cr_expiry_date": data["expiryDate"],
+            "business_owner_1": data["parties"][1]["name"],
+            "owners_iaqama_id": data["parties"][2]["identity"]["id"],
+            "address": data["address"]["general"]["address"]
+        }
+        return wathq_parsed_response
     except Exception as e:
         print(e)
         return {}
@@ -383,18 +392,19 @@ def cr_entry_page():
         if not pdf_file:
             st.error("Please upload a PDF document before submitting.")
         else:
-            pdf_text = extract_text_from_pdf(pdf_file)
-            # st.write(pdf_text)
-            translated_pdf_text1 = translate_arabic_to_english(pdf_text)
-            translated_pdf_text2 = gcloud_translate(pdf_text)
-            # st.write(translated_pdf_text2)
+            with st.spinner("Fetching data..."): 
+                pdf_text = extract_text_from_pdf(pdf_file)
+                # st.write(pdf_text)
+                translated_pdf_text1 = translate_arabic_to_english(pdf_text)
+                translated_pdf_text2 = gcloud_translate(pdf_text)
+                # st.write(translated_pdf_text2)
 
-            ocr_result = smart_ocr_on_cr_doc(translated_pdf_text1, translated_pdf_text2)
-            cr_number = ocr_result.get('cr_number')
-            business_name = ocr_result.get('business_name')
-            business_owner_1 = ocr_result.get('business_owner_1')
-            expiry_date_hijri = ocr_result.get('expiry_date_hijri')
-            location = ocr_result.get('location')
+                ocr_result = smart_ocr_on_cr_doc(translated_pdf_text1, translated_pdf_text2)
+                cr_number = ocr_result.get('cr_number')
+                business_name = ocr_result.get('business_name')
+                business_owner_1 = ocr_result.get('business_owner_1')
+                expiry_date_hijri = ocr_result.get('expiry_date_hijri')
+                location = ocr_result.get('location')
 
             non_optional_keys = ["cr_number", "business_name", "business_owner_1"]
             empty_string_keys = [key for key, value in ocr_result.items() if key in non_optional_keys and value == '']
@@ -439,7 +449,7 @@ def idv_page():
     num_ids_to_upload = st.number_input("How many IDs do you want to upload? (1-3)", 1, 3, 1)
 
     for i in range(num_ids_to_upload):
-        uploaded_id = st.file_uploader(f"Upload Back side of ID {i+1}", type=["jpg", "png", "pdf"])
+        uploaded_id = st.file_uploader(f"Upload National ID {i+1}", type=["jpg", "png"])
         if uploaded_id:
             uploaded_id_content = uploaded_id.read()
             with st.spinner("Fetching data..."):
@@ -488,6 +498,64 @@ def check_address_length(address):
 
     return len(result[0]) > 5
 
+def get_google_search_results(query):
+    url = f"https://www.google.com/search?q={query}"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.104 Safari/537.36"
+    }
+
+    response = requests.get(url, headers=headers)
+
+    if response.status_code == 200:
+        return response.text
+    else:
+        return None
+
+def get_company_address(company_name):
+    company_name = company_name.lower().strip()
+    print(f"company: {company_name}")
+    search_query1 = f"{company_name} saudi address"
+    search_query2 = f"{company_name} dubai address"
+    search_results1 = get_google_search_results(search_query1)
+    print(f"len 1: {len(search_results1)}")
+    search_results2 = get_google_search_results(search_query2)
+    print(f"len 2: {len(search_results2)}")
+
+    if search_results1:
+        soup = BeautifulSoup(search_results1, "html.parser")
+        address = soup.find("div", {"class": "sXLaOe"})
+        if address:
+            address = address.get_text()
+            print(f"addr1: {address}")
+            return address
+        else:
+            soup = BeautifulSoup(search_results2, "html.parser")
+            address = soup.find("div", {"class": "sXLaOe"}).get_text()
+            print(f"addr2: {address}")
+            return address    
+    else:
+        try:
+            soup = BeautifulSoup(search_results2, "html.parser")
+            address = soup.find("div", {"class": "sXLaOe"}).get_text()
+            print(f"addr2: {address}")
+            return address
+        except AttributeError:
+            return None
+
+def fuzzy_match_fields(field1, field2, threshold=70):
+    similarity = fuzz.partial_ratio(field1, field2)
+    print(similarity)
+    return similarity >= threshold
+
+def check_address_from_google(company_name, company_address):
+    google_address = get_company_address(company_name)
+    print(f"address: {google_address}")
+    if google_address:
+        if fuzzy_match_fields(company_address.lower(), google_address.lower()):
+            return True
+        else:
+            return False
+
 def address_verification_page():
     st.title("Address Verification")
 
@@ -495,14 +563,23 @@ def address_verification_page():
 
     if st.button("Submit"):
         if address or check_address_length(address):
+            is_address_verified = False
             is_address_valid = False
+
             data = verify_address(address)
             if data:
+                if hasattr(st.session_state, 'company_name'):
+                    company_name = st.session_state.company_name
+                    company_name = company_name.lower()
+                    with st.spinner(f"checking {company_name}'s address on google"):
+                        google_address_result = check_address_from_google(company_name, address)
+                        is_address_valid = google_address_result
+
                 country_name = data['results'][0]['address_components'][-1]['short_name']
-                if country_name == 'SA':
-                    is_address_valid = True
+                if country_name == 'SA' or country_name == 'AE':
+                    is_address_verified = True
         
-            if is_address_valid:
+            if is_address_verified and is_address_valid:
                 st.success("Address verification   ✅")
                 st.success("Address validation     ✅")
 
@@ -546,29 +623,59 @@ def extract_company_name(url):
         return False, False
 
 def generate_fake_similar_web_data():
-    data = WEB_ANALYSIS_DATA["traffic"]
-    # Extracting date and average visit duration from the data
-    dates = [entry["date"] for entry in data]
-    avg_durations = [entry["traffic"] for entry in data]
+    traffic_data = WEB_ANALYSIS_DATA["traffic"]
+    traffic_dates = [entry["date"] for entry in traffic_data]
+    avg_traffic = [entry["traffic"] for entry in traffic_data]
 
-    fig = px.bar(
-        x=dates,
-        y=avg_durations,
-        labels={'x':'Date', 'y':'Average Traffic'},
-        title='Average Traffic Month-wise',
-    )
+    duration_data = WEB_AVERAGE_DURATION_DATA["duration"]
+    duration_dates = [entry["date"] for entry in duration_data]
+    avg_duration = [entry["average_visit_duration"] for entry in duration_data]
 
-    # Customize layout properties
-    fig.update_layout(
-        xaxis=dict(showgrid=False, gridwidth=1, title_font=dict(size=12)),
-        yaxis=dict(showgrid=False, gridwidth=1, range=[min(avg_durations)-10, max(avg_durations)+10], title_font=dict(size=12)),
-        plot_bgcolor='white',
-        font=dict(size=12),
-        width=700,
-        height=500,
-    )
-    fig.update_traces(marker_color='rgba(255, 0, 0, 0.5)')  # The last value (0.5) controls transparency
-    st.plotly_chart(fig)
+    # st.set_page_config(layout="wide")
+    col1, col2 = st.columns(2)
+
+    with col1:
+        # Create the first chart for average traffic month-wise
+        fig1 = px.bar(
+            x=traffic_dates,
+            y=avg_traffic,
+            labels={'x':'Date', 'y':'Average Traffic'},
+            title='Average Traffic Month-wise',
+        )
+
+        fig1.update_layout(
+            xaxis=dict(showgrid=False, gridwidth=1, title_font=dict(size=12)),
+            yaxis=dict(showgrid=False, gridwidth=1, range=[500, 1500], title_font=dict(size=12)),
+            plot_bgcolor='white',
+            font=dict(size=12),
+            width=340,
+            height=450,
+            margin=dict(r=10),
+        )
+        fig1.update_traces(marker_color='rgba(255, 0, 0, 0.5)')
+
+        st.plotly_chart(fig1)
+
+    with col2:
+        # Create the second chart for average visit duration
+        fig2 = px.bar(
+            x=duration_dates,
+            y=avg_duration,
+            labels={'x':'Date', 'y':'Average Visit Duration'},
+            title='Average Visit Duration Month-wise',
+        )
+
+        fig2.update_layout(
+            xaxis=dict(showgrid=False, gridwidth=1, title_font=dict(size=12)),
+            yaxis=dict(showgrid=False, gridwidth=1, range=[0, 1000], title_font=dict(size=12)),
+            plot_bgcolor='white',
+            font=dict(size=12),
+            width=340,
+            height=450,
+        )
+        fig2.update_traces(marker_color='rgba(0, 0, 255, 0.5)')  # The last value (0.5) controls transparency
+        
+        st.plotly_chart(fig2)
 
 def similar_web_page():
     st.title("Web Traffic Analysis")
@@ -576,32 +683,37 @@ def similar_web_page():
     submit_button = st.button("Submit")
     if company_url and submit_button:
         if verify_url(company_url):
+
+            with st.spinner("Checking url..."):
+                time.sleep(1)
+
             status, company_name = extract_company_name(company_url)
             if status:
-                st.session_state.company_url = company_url
-                st.session_state.company_name = company_name
+                with st.spinner("Fetching Results..."):
+                    st.session_state.company_url = company_url
+                    st.session_state.company_name = company_name
 
-                api_key = '8522d7f391074950a906f0ee4c77268d'
+                    api_key = '8522d7f391074950a906f0ee4c77268d'
 
-                api_url = f'https://api.similarweb.com/v5/website/{company_url}/total-traffic-and-engagement/visits?api_key={api_key}&start_date=2023-01&end_date=2023-08&country=sa&granularity=monthly&main_domain_only=false&format=json&show_verified=false&mtd=false&engaged_only=false'
+                    api_url = f'https://api.similarweb.com/v5/website/{company_url}/total-traffic-and-engagement/visits?api_key={api_key}&start_date=2023-01&end_date=2023-08&country=sa&granularity=monthly&main_domain_only=false&format=json&show_verified=false&mtd=false&engaged_only=false'
 
-                try:
-                    response = requests.get(api_url)
-                    
-                    if response.status_code == 200:
-                        data = response.json()
-                        st.write(data)
-                    else:
+                    try:
+                        response = requests.get(api_url)
+                        
+                        if response.status_code == 200:
+                            data = response.json()
+                            st.write(data)
+                        else:
+                            generate_fake_similar_web_data()
+
+                        st.session_state.next_button_enabled = True
+                        st.session_state.next_page = "address_verification_page"
+
+                        if st.button("Next"):
+                            st.session_state.similar_web = True
+
+                    except Exception as e:
                         generate_fake_similar_web_data()
-
-                    st.session_state.next_button_enabled = True
-                    st.session_state.next_page = "address_verification_page"
-
-                    if st.button("Next"):
-                        st.session_state.similar_web = True
-
-                except Exception as e:
-                    generate_fake_similar_web_data()
             else:
                 st.error("Please enter a valid url")
         else:
@@ -792,35 +904,40 @@ def sentiment_scrape():
 
 
 def thm_verification():
-    st.title("Fraud Analysis")
-    if st.button("Get Analysis"):
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("Device Fingerprint")
-            st.write("Device ID:", THM_RESPONSE["device_fingerprint"]["device_id"])  # Display the device ID
-            st.write("")
-            st.write("")
-        
-        with col2:
-            st.subheader("Identity Verification")
-            st.write("User Behavior Match:", THM_RESPONSE["identity_verification"]["user_behavior_match"])
-            st.write("Identity Verified:", THM_RESPONSE["identity_verification"]["identity_verified"])
+    with st.spinner("Identifying Device.."):
+        time.sleep(1)
 
-        with col1:
-            st.subheader("Geolocation")
-            st.write("Country:", THM_RESPONSE["geolocation"]["country"])
-            st.write("Latitude:", THM_RESPONSE["geolocation"]["latitude"])
-            st.write("Longitude:", THM_RESPONSE["geolocation"]["longitude"])
+    with st.spinner("Fetching Results..."):
+        time.sleep(1)
+        st.title("Fraud Analysis")
+        if st.button("Get Analysis"):
+            col1, col2 = st.columns(2)
+            with col1:
+                st.subheader("Device Fingerprint")
+                st.write("Device ID:", THM_RESPONSE["device_fingerprint"]["device_id"])  # Display the device ID
+                st.write("")
+                st.write("")
+            
+            with col2:
+                st.subheader("Identity Verification")
+                st.write("User Behavior Match:", THM_RESPONSE["identity_verification"]["user_behavior_match"])
+                st.write("Identity Verified:", THM_RESPONSE["identity_verification"]["identity_verified"])
 
-        with col2:
-            st.subheader("Bot Detection")
-            st.write("Is Bot:", THM_RESPONSE["bot_detection"]["is_bot"])
+            with col1:
+                st.subheader("Geolocation")
+                st.write("Country:", THM_RESPONSE["geolocation"]["country"])
+                st.write("Latitude:", THM_RESPONSE["geolocation"]["latitude"])
+                st.write("Longitude:", THM_RESPONSE["geolocation"]["longitude"])
 
-        st.session_state.next_button_enabled = True
-        st.session_state.next_page = "world_check"
-        
-        if st.button("Next"):
-            st.session_state.world_check = True
+            with col2:
+                st.subheader("Bot Detection")
+                st.write("Is Bot:", THM_RESPONSE["bot_detection"]["is_bot"])
+
+            st.session_state.next_button_enabled = True
+            st.session_state.next_page = "world_check"
+            
+            if st.button("Next"):
+                st.session_state.world_check = True
 
 def world_check():
     st.title("World Check Results")
