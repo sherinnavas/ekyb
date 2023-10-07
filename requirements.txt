@@ -38,8 +38,8 @@ h2==3.2.0
 hijri-converter==2.3.1
 hpack==3.0.0
 hstspreload==2023.1.1
-httpcore==0.18.0
 httpx==0.13.3
+httpcore
 huggingface-hub==0.16.4
 hyperframe==5.2.0
 idna==2.10
