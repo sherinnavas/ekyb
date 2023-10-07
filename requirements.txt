@@ -36,8 +36,8 @@ grpcio-status==1.59.0
 h11
 h2
 hijri-converter==2.3.1
-hpack==3.0.0
-hstspreload==2023.1.1
+hpack
+hstspreload
 httpx==0.13.3
 httpcore
 huggingface-hub==0.16.4
