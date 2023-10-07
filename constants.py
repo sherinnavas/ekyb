@@ -37,7 +37,7 @@ WEB_ANALYSIS_DATA = {
     ]
 }
 
-WEB_AVERAGE_DURATION_DATA = [
+WEB_AVERAGE_DURATION_DATA = { "duration": [
     {
         "date": "2023-01-01",
         "average_visit_duration": random.uniform(200, 1000)
@@ -71,6 +71,7 @@ WEB_AVERAGE_DURATION_DATA = [
         "average_visit_duration": random.uniform(200, 1000)
     }
 ]
+}
 
 device_id = str(random.randint(10000000, 99999999))
 
