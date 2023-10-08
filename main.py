@@ -114,8 +114,14 @@ def twitter_scrape(business_name):
     # subprocess.run(command1)
     # subprocess.run(command2)
 
+    business_name = str(business_name)
+    start_date = "2023-08-01"
+    end_date = "2023-08-29"
+
+    command = 'twscrape search "%s since:%s until:%s" --raw' % (business_name, start_date, end_date)
     # command = f'twscrape search "{business_name} since:2023-08-01 until:2023-08-29" --raw'
-    command = f'twscrape search "nymcard since:2023-08-01 until:2023-08-29" --raw'
+    # command = f'twscrape search "nymcard since:2023-08-01 until:2023-08-29" --raw'
+
     print(f"running command: {command}")
     try:
         result = subprocess.run(
@@ -125,7 +131,7 @@ def twitter_scrape(business_name):
             shell=True,
             text=True,
         )
-        print(result)
+        # print(result)
         print(f"stdout: {result.stdout}")
         print(f"stderr: {result.stderr}")
 
@@ -219,6 +225,7 @@ def google_reviews_scrape(business_name):
             reviews_data = reviews_response.json()
 
             reviews = reviews_data.get("result", {}).get("reviews", [])
+            print(f"reviews: {reviews}")
             extracted_reviews_list = []
 
             for item in reviews:
@@ -384,7 +391,7 @@ def smart_ocr_on_cr_doc(pdf_text1, pdf_text2):
 # C/R Entry Page
 def cr_entry_page():
     st.title("C/R - Verification")
-    pdf_file = st.file_uploader("Upload a C/R Document:")
+    pdf_file = st.file_uploader("Upload a C/R Document(PDF only)", type=["pdf"])
     submit_button = st.button("Submit")
 
     if submit_button:
@@ -480,43 +487,43 @@ def expense_benchmarking_page():
     st.title("Revenue/Cash Flow Analysis")
     uploaded_file = st.file_uploader("Upload Bank Statement (PDF only)", type=["pdf"])
     
-    if uploaded_file is not None:
-        with st.spinner("Reading Bank Statement..."):
-            expense, free_cash_flow, revenue = analyze_bank_statement(uploaded_file)
-        
-        with st.spinner("Analyzing Results..."):
-            time.sleep(2)
-        
-        data = pd.DataFrame({
-            'Month': ['Jan', 'Feb', 'Mar', 'Apr', 'May'],
-            'Expense': [5000, 4500, 5500, 4800, 5100],
-            'Revenue': [15000, 15500, 16000, 16200, 16500],
-            'Free Cash Flow': [10000, 10500, 11000, 11200, 11500]
-        })
+    if st.button("Submit"):
+        if uploaded_file is not None:
+            with st.spinner("Reading Bank Statement..."):
+                expense, free_cash_flow, revenue = analyze_bank_statement(uploaded_file)
+            
+            with st.spinner("Analyzing Results..."):
+                time.sleep(2)
+            
+            data = pd.DataFrame({
+                'Month': ['Jan', 'Feb', 'Mar', 'Apr', 'May'],
+                'Expense': [5000, 4500, 5500, 4800, 5100],
+                'Revenue': [15000, 15500, 16000, 16200, 16500],
+                'Free Cash Flow': [10000, 10500, 11000, 11200, 11500]
+            })
 
-        fig = px.bar(data, x='Month', y=['Expense', 'Revenue', 'Free Cash Flow'], 
-                     title='Monthly Expense, Revenue, and Free Cash Flow Analysis')
+            fig = px.bar(data, x='Month', y=['Expense', 'Revenue', 'Free Cash Flow'], 
+                        title='Monthly Expense, Revenue, and Free Cash Flow Analysis')
 
-        fig.update_layout(
-            xaxis=dict(showgrid=False),
-            yaxis=dict(showgrid=False),
-            plot_bgcolor='white',
-            width=750,
-            height=570,
-        )
+            fig.update_layout(
+                xaxis=dict(showgrid=False),
+                yaxis=dict(showgrid=False),
+                plot_bgcolor='white',
+                width=750,
+                height=570,
+            )
 
-        fig.update_traces(marker=dict(color='#77DD77'), selector=dict(name='Free Cash Flow'))
-        st.plotly_chart(fig)
+            fig.update_traces(marker=dict(color='#77DD77'), selector=dict(name='Free Cash Flow'))
+            st.plotly_chart(fig)
 
-        st.session_state.next_button_enabled = True
-        st.session_state.next_page = "similar_web_page"
+            st.session_state.next_button_enabled = True
+            st.session_state.next_page = "similar_web_page"
 
-    if st.session_state.get("next_button_enabled"):
-        if st.button("Next"):
-            st.session_state.expense_benchmarking = True
-
-    else:
-        st.error("Please upload a Bank statement PDF before submitting.")
+            if st.session_state.get("next_button_enabled"):
+                if st.button("Next"):
+                    st.session_state.expense_benchmarking = True
+        else:
+            st.error("Please upload a Bank statement PDF before submitting.")
 
 def verify_address(address):
     endpoint = "https://maps.googleapis.com/maps/api/geocode/json"
@@ -579,10 +586,13 @@ def get_company_address(company_name):
             print(f"addr1: {address}")
             return address
         else:
-            soup = BeautifulSoup(search_results2, "html.parser")
-            address = soup.find("div", {"class": "sXLaOe"}).get_text()
-            print(f"addr2: {address}")
-            return address    
+            try:
+                soup = BeautifulSoup(search_results2, "html.parser")
+                address = soup.find("div", {"class": "sXLaOe"}).get_text()
+                print(f"addr2: {address}")
+                return address
+            except:
+                return None    
     else:
         try:
             soup = BeautifulSoup(search_results2, "html.parser")
@@ -609,7 +619,7 @@ def check_address_from_google(company_name, company_address):
 def address_verification_page():
     st.title("Address Verification")
 
-    address = st.text_input("Enter address of the business")
+    address = st.text_input("Enter address of the business", placeholder="Eg. Al Salam Tecom Tower, Dubai Media City, UAE")
 
     if st.button("Submit"):
         if address or check_address_length(address):
@@ -629,7 +639,7 @@ def address_verification_page():
                 if country_name == 'SA' or country_name == 'AE':
                     is_address_verified = True
         
-            if is_address_verified and is_address_valid:
+            if is_address_verified or is_address_valid:
                 st.success("Address verification   ✅")
                 st.success("Address validation     ✅")
 
@@ -665,12 +675,24 @@ def extract_company_name(url):
                 return True, company_name
 
         else:
-            pattern = r'https://|www\.|\.com'
-            cleaned_url = re.sub(pattern, '', url)
-            return False, cleaned_url
+            pattern = r'https://|www\.|\.com|\.sa|\.ae|en'
+            cleaned_url = re.sub(pattern, '', url).strip('/')
+            parts = cleaned_url.split('/')
+            if parts:
+                keyword = parts[-1]
+                return True, keyword
+            else:
+                return False, ""
     
     except Exception as e:
-        return False, False
+        pattern = r'https://|www\.|\.com|\.sa|\.ae|en'
+        cleaned_url = re.sub(pattern, '', url).strip('/')
+        parts = cleaned_url.split('/')
+        if parts:
+            keyword = parts[-1]
+            return True, keyword
+        else:
+            return False, ""
 
 def generate_fake_similar_web_data():
     traffic_data = WEB_ANALYSIS_DATA["traffic"]
@@ -729,7 +751,7 @@ def generate_fake_similar_web_data():
 
 def similar_web_page():
     st.title("Web Traffic Analysis")
-    company_url = st.text_input("Enter Business Url: ")
+    company_url = st.text_input("Enter Business Url: ", placeholder="Eg. https://nymcard.com")
     submit_button = st.button("Submit")
     if company_url and submit_button:
         if verify_url(company_url):
@@ -768,6 +790,8 @@ def similar_web_page():
                 st.error("Please enter a valid url")
         else:
             st.error("Please enter complete valid url of the company")
+    elif submit_button and not company_url:
+        st.error("Please enter url of the company before submitting")
             
 
 def render_progress_bar(value):
@@ -811,8 +835,18 @@ def sentiment_scrape():
             ig_post_list.extend([''] * (max_len - len(ig_post_list)))
             google_reviews_list.extend([''] * (max_len - len(google_reviews_list)))
 
+            data = {}
+            if any(item.strip() for item in tweet_list):
+                data['Twitter'] = tweet_list
+
+            if any(item.strip() for item in ig_post_list):
+                data['Instagram'] = ig_post_list
+            
+            if any(item.strip() for item in google_reviews_list):
+                data['Google Reviews'] = google_reviews_list
+
             with st.expander(f"Extracted Data for {company_name}"):
-                df = pd.DataFrame({'Google Reviews': google_reviews_list, 'Tweets': tweet_list, 'Instagram': ig_post_list})
+                df = pd.DataFrame(data)
                 html_table = df.head(3).to_html(index=False, header=True)
                 st.markdown(html_table, unsafe_allow_html=True)
 
