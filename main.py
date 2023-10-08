@@ -459,14 +459,65 @@ def idv_page():
     if st.session_state.get("next_button_enabled"):
         if st.button("Next"):
             # Set the next page to "similar_web_page" (you can change this as needed)
-            st.session_state.next_page = "similar_web_page"
+            st.session_state.next_page = "expense_benchmarking_page"
             st.session_state.idv_response = True
 
     with st.expander("Extracted Details"):
         for i, id_data in enumerate(uploaded_ids, start=1):
             st.subheader(f"Details from ID {i}")
             display_details_in_table(id_data, i)
-            
+
+def analyze_bank_statement(pdf_file):
+    time.sleep(2)
+
+    expense = 5000
+    free_cash_flow = 10000
+    revenue = 15000
+
+    return expense, free_cash_flow, revenue
+
+def expense_benchmarking_page():
+    st.title("Revenue/Cash Flow Analysis")
+    uploaded_file = st.file_uploader("Upload Bank Statement (PDF only)", type=["pdf"])
+    
+    if uploaded_file is not None:
+        with st.spinner("Reading Bank Statement..."):
+            expense, free_cash_flow, revenue = analyze_bank_statement(uploaded_file)
+        
+        with st.spinner("Analyzing Results..."):
+            time.sleep(2)
+        
+        data = pd.DataFrame({
+            'Month': ['Jan', 'Feb', 'Mar', 'Apr', 'May'],
+            'Expense': [5000, 4500, 5500, 4800, 5100],
+            'Revenue': [15000, 15500, 16000, 16200, 16500],
+            'Free Cash Flow': [10000, 10500, 11000, 11200, 11500]
+        })
+
+        fig = px.bar(data, x='Month', y=['Expense', 'Revenue', 'Free Cash Flow'], 
+                     title='Monthly Expense, Revenue, and Free Cash Flow Analysis')
+
+        fig.update_layout(
+            xaxis=dict(showgrid=False),
+            yaxis=dict(showgrid=False),
+            plot_bgcolor='white',
+            width=750,
+            height=570,
+        )
+
+        fig.update_traces(marker=dict(color='#77DD77'), selector=dict(name='Free Cash Flow'))
+        st.plotly_chart(fig)
+
+        st.session_state.next_button_enabled = True
+        st.session_state.next_page = "similar_web_page"
+
+    if st.session_state.get("next_button_enabled"):
+        if st.button("Next"):
+            st.session_state.expense_benchmarking = True
+
+    else:
+        st.error("Please upload a Bank statement PDF before submitting.")
+
 def verify_address(address):
     endpoint = "https://maps.googleapis.com/maps/api/geocode/json"
     api_key = "AIzaSyC3jF85Z6qgAEBwqwCdP8j_YM_XQcvEH-s"
@@ -719,74 +770,6 @@ def similar_web_page():
             st.error("Please enter complete valid url of the company")
             
 
-# def sentiment_scrape():
-#     st.title("Sentiment Scrape Results")
-#     if st.button("Get Analysis"):
-#         if hasattr(st.session_state, 'company_url'):
-#             company_url = st.session_state.company_url
-            
-#         if hasattr(st.session_state, 'company_name'):
-#             company_name = st.session_state.company_name
-
-#         tweet_list = twitter_scrape(company_name)
-#         ig_post_list = []
-#         # ig_post_list = instagram_scrape(company_name)
-#         google_reviews_list = google_reviews_scrape(company_name)
-
-#         max_len = max(len(tweet_list), len(ig_post_list), len(google_reviews_list))
-#         if max_len > 3:
-#             max_len = 3
-        
-#         tweet_list.extend([None] * (max_len - len(tweet_list)))
-#         ig_post_list.extend([None] * (max_len - len(ig_post_list)))
-#         google_reviews_list.extend([None] * (max_len - len(google_reviews_list)))
-
-#         st.write(f"Extracted Results for {company_name}")
-
-#         if st.button("View Extracted Data"):
-#             df = pd.DataFrame({'Google Reviews': google_reviews_list, 'Tweets': tweet_list, 'Instagram': ig_post_list})
-#             st.dataframe(df)
-#         # st.write(tweet_list)
-
-#         all_tweet_texts = " ".join(tweet_list)
-#         sentiment, prob1 = analyze_sentiment_bert(all_tweet_texts)
-#         st.write("Sentiment Distribution:")
-
-#         all_ig_texts = " ".join(ig_post_list)
-#         sentiment, prob2 = analyze_sentiment_bert(all_ig_texts)
-
-#         all_gr_texts = " ".join(google_reviews_list)
-#         sentiment, prob3 = analyze_sentiment_bert(all_gr_texts)
-        
-#         labels = ["Positive", "Negative"]
-#         values = [prob1, 1 - prob1]
-#         fig = px.bar(
-#             x=labels,
-#             y=values,
-#             labels={'x': 'Sentiment', 'y': 'Confidence'},
-#             width=400,
-#             height=500,
-#         )
-
-#         fig.update_layout(
-#             xaxis=dict(title_font=dict(size=12)),
-#             yaxis=dict(showgrid=False, gridwidth=1, range=[0, 1], title_font=dict(size=12)),
-#             plot_bgcolor='white',
-#             font=dict(size=12),
-#             margin=dict(l=0, r=0, b=0, t=30),  # Adjust margin
-#             bargap=0.3,  # Adjust gap between bars
-#         )
-
-#         fig.update_traces(marker=dict(color=['rgba(0, 128, 0, 0.5)', 'rgba(255, 0, 0, 0.5)']))
-
-#         st.plotly_chart(fig)
-
-#         st.session_state.next_button_enabled = True
-#         st.session_state.next_page = "thm_verification"
-
-#         if st.button("Next"):
-#             st.session_state.thm_verification = True
-
 def render_progress_bar(value):
     # A custom HTML/CSS implementation of a progress bar
     progress_bar = f"""
@@ -958,6 +941,8 @@ def navigate():
         cr_entry_page()
     elif st.session_state.next_page == "idv_page":
         idv_page()
+    elif st.session_state.next_page == "expense_benchmarking_page":
+        expense_benchmarking_page()
     elif st.session_state.next_page == "similar_web_page":
         similar_web_page()
     elif st.session_state.next_page == "address_verification_page":
@@ -982,6 +967,8 @@ def main():
         st.session_state.wathq_response = False
     if not hasattr(st.session_state, "idv_response"):
         st.session_state.idv_response = False
+    if not hasattr(st.session_state, "expense_benchmarking"):
+        st.session_state.expense_benchmarking = False
     if not hasattr(st.session_state, "similar_web"):
         st.session_state.similar_web = False
     if not hasattr(st.session_state, "sentiment_scrape"):
@@ -994,24 +981,6 @@ def main():
         st.session_state.next_button_enabled = False
 
     navigate()
-
-    # if not hasattr(st.session_state, "login"):
-    #     st.session_state.login = False
-    # if not hasattr(st.session_state, "wathq_response"):
-    #     st.session_state.wathq_response = False
-    # if not hasattr(st.session_state, "next_button_enabled"):
-    #     st.session_state.next_button_enabled = False
-
-    # if not st.session_state.login:
-    #     login_page()
-    # elif not st.session_state.wathq_response:
-    #     cr_entry_page()
-
-    # Handle going back to the C/R Entry Page
-    # previous_page = st.experimental_get_query_params().get("previous_page")
-    # if previous_page == "cr_entry" and st.session_state.wathq_response:
-    #     st.session_state.wathq_response = False
-    #     st.experimental_rerun()
 
 if __name__ == "__main__":
     main()
