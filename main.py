@@ -11,8 +11,9 @@ from PIL import Image
 import re
 import plotly.express as px
 from plotly.subplots import make_subplots
+from datetime import datetime
 import plotly.graph_objects as go
-from constants import WEB_ANALYSIS_DATA, THM_RESPONSE, WEB_AVERAGE_DURATION_DATA
+from constants import THM_RESPONSE
 import subprocess
 import json
 import pandas as pd
@@ -25,7 +26,10 @@ from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 import time
 from id_upload import extract_id_details
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 from bankstatementextractor_sau.BanksExtractor import *
+import random
 # from wordcloud import WordCloud
 # import numpy as np
 
@@ -458,7 +462,7 @@ def cr_entry_page():
                         if location:
                             st.success(f"Business Address: {location} ✅")
                         else:
-                            st.success(f"Business Address: {wathq_result['address']} ✅")
+                            st.success(f"Business Address: {location} ✅")
                         
                         st.session_state.next_button_enabled = True
                         st.session_state.next_page = "idv_page"
@@ -764,12 +768,12 @@ def extract_company_name(url):
         else:
             return False, ""
 
-def generate_fake_similar_web_data():
-    traffic_data = WEB_ANALYSIS_DATA["traffic"]
+def generate_fake_similar_web_data(WEB_ANALYSIS_DATA, WEB_AVERAGE_DURATION_DATA):
+    traffic_data, duration_data = WEB_ANALYSIS_DATA, WEB_AVERAGE_DURATION_DATA
+
     traffic_dates = [entry["date"] for entry in traffic_data]
     avg_traffic = [entry["traffic"] for entry in traffic_data]
 
-    duration_data = WEB_AVERAGE_DURATION_DATA["duration"]
     duration_dates = [entry["date"] for entry in duration_data]
     avg_duration = [entry["average_visit_duration"] for entry in duration_data]
 
@@ -819,50 +823,137 @@ def generate_fake_similar_web_data():
         
         st.plotly_chart(fig2)
 
+def save_data_to_sheet(url, timestamp, traffic_data, duration_data, sheet):
+    traffic_json = json.dumps(traffic_data)
+    duration_json = json.dumps(duration_data)
+    data = [url, timestamp, traffic_json, duration_json]
+    sheet.append_row(data)
+
+def get_data_from_sheet(url, sheet):
+    data = sheet.get_all_values()
+    for row in data:
+        if row[0] == url:
+            timestamp, traffic_json, duration_json = row[1], row[2], row[3]
+            traffic_data = json.loads(traffic_json)
+            duration_data = json.loads(duration_json)
+            
+            return timestamp, traffic_data, duration_data
+    return None, None, None
+
 def similar_web_page():
+    GDRIVE_CREDS = {
+    "type": "service_account",
+    "project_id": "st-project-387317",
+    "private_key_id": "e5778cc6315dac8480eb841efa093147fa47d996",
+    "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCwK8/wpxa4JRWx\n7KfObiLoebmjLrAjYpv8E+3yTHqp3X+p/xBgQYrics//LCX8sXsFG77dW4vLib0V\nw2U4uygIvi2juzQKGUpDlb9aZ2jKexuToX+UZoa+RUxZICX+J0oDylK3vqcfsPAD\nhivGzveZSmW9cuuop1PMT/nl9vjEzUjcP3YrCcoMdRCUyVj21u3Vy6Qy0zkZU+iv\nZUfQo4kqDQuQU3qSrgvHrzx/zxhLcHvYXKXcaz31Llbd9kyKo35zaq8XnNOAczpn\ncVmeFbxkcrYfu8JtyIv97lOgTHsuxIDauJ8of5I+3Ng+wMW8uo7z8KawBM8a/YFA\nQzVBP0YLAgMBAAECggEAO4oDE90Uk5WM+H331I9qYtFIyPqtcrgP6ai+oUXxqtj+\nHXDjkvRzwMZ2v1GnYPiGkBppbhxTaa2aZvGLkxnFlPbZK93H36XecGr6qc4LH2tt\nzX4mRPxFi6aWAAUacgPLQu6s+AaKKu68nyRIRT+LdJYtPlLJjE1Ix+M7nNnUB4ad\nsJgG0KiMJib4q721VoEpQCfzgNsKN2TX0pJovokNv8slULMKouul94bSfRn7WeEo\nSyVceewz2JNMmym529bcnrdkSWujLEzXrA5V8GFaNgUcc+oSDlm7maPu9uSMFTv/\nceXgCKikYqik5XOFXjy4xpOnTII9cMUi8nkEWox+AQKBgQDkGBQ0AO1WOWylNCmH\n0Wk53m8701JSOsigG3ZXz7sQYa9rL57bkAk+T4oKL4AS2F14ARo672G2jlga8MY+\nGwBII8eStqtvBgpbfFR458rQT9QmeN59xExHxlDQHq6x9BV27cBb4fr6i9+YnGG0\nGwL3FWx09BSlPgGKIHK8xITJCwKBgQDFuYEPmf08fNq7fWZHqQvU++ma7iuUSCNW\n0v3YAnWO3EIm0rvFjpXzp7t8crkkcywj6TmFtttMm7mXT5nY53C4nDiLl72d8hfr\nFCTXY1NLgucj9AsM1OZnqV0g0FgXUXPFyr4acjYT990Qf9HF/KHLZztkLuxci5jb\np7zht4+XAQKBgQCOBiw2QUmGwdTTfQpLBmqV3Nm4D5oXl4CqqM7kWHVq+thGTm2E\n20fWI6KZOwBtO4nfmhgiEEHwcOuNQtS9gQSI5rZytQlD5Sf31Q+oBPQ1By/bELHA\n78RrgKF7JU+zgH8JAXsf+zLSZNvB48W2ZodPIGja3cwpI9XDkva+cUMZBwKBgDPB\nqjHuSiaCPDNl0NcjPfCjfHPMsmWfOHjqw/2+Lw2VRE+rS/GbsE7WcjJSSXpsF3rS\n+vawddkozjz4Xjoz4wLACeEoeD8W9wHXBQnIey5B9sUnhZj3RdSOtcz4HIcGEDsP\nJhIAIX26nQhLnRqpVaTLwfUof0B+XiXpU3z2MsUBAoGBAME1VwH07HSFjsjRKK+C\n/GphuvXBpBED1hGX7YIE4mF3HCVM8WilvW+2c5cxOnIPEL/M5W69h8Wl5okojpNQ\ngQiXCEd4PAnRNUeAw7fGq9jnl0ax/wmLIXnDl3czojhpKmrKg5cNhRQw0OYjEZrG\nmAO3VDeMT0xk9E1SoTMqTiEO\n-----END PRIVATE KEY-----\n",
+    "client_email": "collection-app@st-project-387317.iam.gserviceaccount.com",
+    "client_id": "116665121729126589127",
+    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+    "token_uri": "https://oauth2.googleapis.com/token",
+    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+    "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/collection-app%40st-project-387317.iam.gserviceaccount.com",
+    "universe_domain": "googleapis.com"
+    }
+
+    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(GDRIVE_CREDS, scope)
+    client = gspread.authorize(creds)
+    sheet = client.open("streamlit_data").worksheet('similar_web_data')
+
     st.title("Web Traffic Analysis")
     company_url = st.text_input("Enter Business Url: ", placeholder="Eg. https://nymcard.com")
     submit_button = st.button("Submit")
+    
     if company_url and submit_button:
         if verify_url(company_url):
-
             with st.spinner("Checking url..."):
                 time.sleep(1)
-
             status, company_name = extract_company_name(company_url)
             if status:
                 with st.spinner("Fetching Results..."):
                     st.session_state.company_url = company_url
                     st.session_state.company_name = company_name
-
                     api_key = '8522d7f391074950a906f0ee4c77268d'
-
                     api_url = f'https://api.similarweb.com/v5/website/{company_url}/total-traffic-and-engagement/visits?api_key={api_key}&start_date=2023-01&end_date=2023-08&country=sa&granularity=monthly&main_domain_only=false&format=json&show_verified=false&mtd=false&engaged_only=false'
-
                     try:
                         response = requests.get(api_url)
-                        
                         if response.status_code == 200:
                             data = response.json()
+                            # Check if data for the same URL exists in the sheet
+                            saved_timestamp, saved_traffic_data, saved_duration_data = get_data_from_sheet(company_url, sheet)
+                            if saved_timestamp:
+                                print("Using saved data from the sheet")
+                                # Use saved data
+                                timestamp = saved_timestamp
+                                traffic_data = saved_traffic_data
+                                duration_data = saved_duration_data
+                            else:
+                                # Generate fake data if not found and save it to the sheet
+                                timestamp = str(datetime.now())
+                                traffic_data = generate_fake_traffic_data()
+                                duration_data = generate_fake_duration_data()
+                                save_data_to_sheet(company_url, timestamp, traffic_data, duration_data, sheet)
                             st.write(data)
+                            st.session_state.next_button_enabled = True
+                            st.session_state.next_page = "address_verification_page"
+                            if st.button("Next"):
+                                st.session_state.similar_web = True
                         else:
-                            generate_fake_similar_web_data()
+                            saved_timestamp, saved_traffic_data, saved_duration_data = get_data_from_sheet(company_url, sheet)
+                            if saved_timestamp:
+                                print("Using saved data from the sheet")
+                                # Use saved data
+                                timestamp = saved_timestamp
+                                traffic_data = saved_traffic_data
+                                duration_data = saved_duration_data
+                                generate_fake_similar_web_data(traffic_data, duration_data)
+                            else:
+                                # Generate fake data if not found and save it to the sheet
+                                timestamp = str(datetime.now())
+                                traffic_data = generate_fake_traffic_data()
+                                duration_data = generate_fake_duration_data()
+                                save_data_to_sheet(company_url, timestamp, traffic_data, duration_data, sheet)
+                                generate_fake_similar_web_data(traffic_data, duration_data)
 
                         st.session_state.next_button_enabled = True
                         st.session_state.next_page = "address_verification_page"
-
                         if st.button("Next"):
                             st.session_state.similar_web = True
-
                     except Exception as e:
-                        generate_fake_similar_web_data()
+                        saved_timestamp, saved_traffic_data, saved_duration_data = get_data_from_sheet(company_url, sheet)
+                        if saved_timestamp:
+                            print("Using saved data from the sheet")
+                            # Use saved data
+                            timestamp = saved_timestamp
+                            traffic_data = saved_traffic_data
+                            duration_data = saved_duration_data
+                            generate_fake_similar_web_data(traffic_data, duration_data)
+                        else:
+                            # Generate fake data if not found and save it to the sheet
+                            timestamp = str(datetime.now())
+                            traffic_data = generate_fake_traffic_data()
+                            duration_data = generate_fake_duration_data()
+                            save_data_to_sheet(company_url, timestamp, traffic_data, duration_data, sheet)
+                            generate_fake_similar_web_data(traffic_data, duration_data)
             else:
-                st.error("Please enter a valid url")
+                st.error("Please enter a valid URL")
         else:
-            st.error("Please enter complete valid url of the company")
+            st.error("Please enter a complete valid URL of the company")
     elif submit_button and not company_url:
-        st.error("Please enter url of the company before submitting")
-            
+        st.error("Please enter a URL of the company before submitting")
+
+# Call this function to generate fake traffic data
+def generate_fake_traffic_data():
+    traffic_dates = pd.date_range(start="2023-01-01", end="2023-08-01", freq="MS")
+    traffic_data = [{"date": str(date), "traffic": random.uniform(1000, 1500)} for date in traffic_dates]
+    return traffic_data
+
+# Call this function to generate fake duration data
+def generate_fake_duration_data():
+    duration_dates = pd.date_range(start="2023-01-01", end="2023-08-01", freq="MS")
+    duration_data = [{"date": str(date), "average_visit_duration": random.uniform(200, 1000)} for date in duration_dates]
+    return duration_data
+
 
 def render_progress_bar(value):
     # A custom HTML/CSS implementation of a progress bar
