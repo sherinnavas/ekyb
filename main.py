@@ -25,6 +25,7 @@ from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 import time
 from id_upload import extract_id_details
+from bankstatementextractor_sau.BanksExtractor import *
 # from wordcloud import WordCloud
 # import numpy as np
 
@@ -76,25 +77,6 @@ def extract_text_from_pdf(pdf_file):
         print(e)
         return None
 
-# # def extract_text_from_pdf(uploaded_file):
-#     pdf_text = ""
-#     if uploaded_file:
-#         pdf_reader = PyPDF2.PdfReader(uploaded_file)
-#         for page_num in range(len(pdf_reader.pages)):
-#             page = pdf_reader.pages[page_num]
-#             pdf_text += page.extract_text()
-#     return pdf_text
-
-# def extract_text_from_pdf(uploaded_file):
-#     pdf_document = PdfReader(uploaded_file)
-#     plain_text_data = []
-#     for page in pdf_document.pages:
-#         page_text = page.extract_text()
-#         # Split text into blocks based on newline
-#         page_text_blocks = page_text.split('\n')
-#         plain_text_data.append(page_text_blocks)  # Append the list of text blocks to the main list
-#     print(f"data: {plain_text_data}")
-#     return plain_text_data
 
 def translate_arabic_to_english(arabic_text):
     try:
@@ -250,17 +232,6 @@ def analyze_sentiment_bert(text):
     sentiment = "Positive" if prob[1] > 0.5 else "Negative"
     return sentiment, float(prob[1])
 
-# def generate_word_cloud(texts):
-#     wordcloud = WordCloud(width=800, height=400, background_color="white").generate(texts)
-#     wordcloud_data = px.imshow(np.array(wordcloud), color_continuous_scale='gray', binary_string=True)
-#     wordcloud_data.update_layout(
-#         title="Word Cloud",
-#         xaxis=dict(visible=False),
-#         yaxis=dict(visible=False),
-#         margin=dict(l=0, r=0, b=0, t=0),
-#     )
-#     st.plotly_chart(wordcloud_data)
-
 def eastern_arabic_to_english(eastern_numeral):
     arabic_to_english_map = {
         '۰': '0',
@@ -299,7 +270,7 @@ def login_page():
     if login_button:
         if check_credentials(username, password):
             # Display a success message and set the session state variable
-            login_status.success("Login successful! Proceed to the data entry screen.")
+            login_status.success("Login successful! Proceed to the cr verification screen.")
             st.session_state.next_page = "cr_entry"
             st.session_state.login = True
             
@@ -315,29 +286,22 @@ def get_response_from_wathq(cr_number):
     }
 
     try:
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, timeout=5)
         data = response.json()
+        print(f"\n\n Data: {data}")
+        translator = Translator()
         wathq_parsed_response = {
             "cr_number": data["crNumber"],
-            "business_name": data["crName"],
+            "business_name": translator.translate(data["crName"], src='ar', dest='en').text,
             "cr_expiry_date": data["expiryDate"],
-            "business_owner_1": data["parties"][1]["name"],
-            "owners_iaqama_id": data["parties"][2]["identity"]["id"],
-            "address": data["address"]["general"]["address"]
+            "business_owner_1": translator.translate(data["parties"][1]["name"], src='ar', dest='en').text,
+            "owners_iaqama_id": data["parties"][1]["identity"]["id"],
+            "address": translator.translate(data["address"]["general"]["address"], src='ar', dest='en').text
         }
         return wathq_parsed_response
     except Exception as e:
         print(e)
         return {}
-
-def extract_business_details_and_ping_wathq(data, cr_number=False):
-    if not cr_number:
-        cr_number = data.get('cr_number')
-    else:
-        cr_number = data
-
-    resp = get_response_from_wathq(cr_number)
-    return resp
 
 def smart_ocr_on_cr_doc(pdf_text1, pdf_text2):
     fields = {
@@ -388,7 +352,15 @@ def smart_ocr_on_cr_doc(pdf_text1, pdf_text2):
 
     return fields
 
-# C/R Entry Page
+def verify_business_details(ocr_result, wathq_result):
+    flag = True
+
+    flag = ocr_result['cr_number'] == wathq_result['cr_number']
+    flag = fuzzy_match_fields(ocr_result['business_name'], wathq_result['business_name'])
+    flag = fuzzy_match_fields(ocr_result['business_owner_1'], wathq_result['business_owner_1'])
+    print(f"Flag: {flag}")
+    return flag
+
 def cr_entry_page():
     st.title("C/R - Verification")
     pdf_file = st.file_uploader("Upload a C/R Document(PDF only)", type=["pdf"])
@@ -399,6 +371,7 @@ def cr_entry_page():
             st.error("Please upload a PDF document before submitting.")
         else:
             with st.spinner("Fetching data..."): 
+                business_details_container = st.empty()
                 pdf_text = extract_text_from_pdf(pdf_file)
                 # st.write(pdf_text)
                 translated_pdf_text1 = translate_arabic_to_english(pdf_text)
@@ -418,30 +391,83 @@ def cr_entry_page():
             if empty_string_keys:
                 st.error("Please upload a Valid CR Document PDF")
             else:
-                st.title("Business Details:")
-                st.success(f"CR Number: {cr_number} ✅")
-                st.success(f"Business Name: {business_name} ✅")
-                st.success(f"Business Owner: {business_owner_1} ✅")
-                st.success(f"CR Expiry Date: {expiry_date_hijri} ✅")
-                st.success(f"Business Address: {location} ✅")
 
-                # cr_number = ocr_result['cr_number']
-                # result = extract_business_details_and_ping_wathq(ocr_result)
+                matches = re.findall(r'\w+\s+\w+', business_owner_1)
+                if len(matches) >= 2:
+                    result1 = matches[0]
+                    result2 = matches[1]
+                    business_owner_name = result1
+                else:
+                    business_owner_name = business_owner_1
+                
+                st.session_state.owner_name = business_owner_name
 
-                result = {}
+                # Clear the previous business details
+                business_details_container.empty()
 
-                st.write(result)
+                # Display the new business details
+                st.subheader("Extracted Details from CR:")
+                st.write(f"CR Number: {cr_number}")
+                st.write(f"Business Name: {business_name}")
+                st.write(f"Business Owner: {business_owner_1}")
+                if expiry_date_hijri:
+                    st.write(f"CR Expiry Date: {expiry_date_hijri}")
+                if location:
+                    st.write(f"Business Address: {location}")
+            
+                with st.spinner("Verifying Details..."):
+                    cr_number = ocr_result['cr_number']
+                    wathq_result = get_response_from_wathq(cr_number)
+                    print(f"\n\nwathq result: {wathq_result}")
+                    
+                    if wathq_result:
+                        if verify_business_details(ocr_result, wathq_result):
+                            business_details_container.empty()
+                            st.subheader("Verified Details")
+                            st.success(f"CR Number: {cr_number} ✅")
+                            st.success(f"Business Name: {business_name} ✅")
+                            st.success(f"Business Owner: {business_owner_name} ✅")
+                            if expiry_date_hijri:
+                                st.success(f"CR Expiry Date: {expiry_date_hijri} ✅")
+                            else:
+                                st.success(f"CR Expiry Date: {wathq_result['cr_expiry_date']} ✅")
+                            if location:
+                                st.success(f"Business Address: {location} ✅")
+                            else:
+                                st.success(f"Business Address: {wathq_result['address']} ✅")
 
-                st.session_state.next_button_enabled = True
-                st.session_state.next_page = "idv_page"
+                            st.session_state.next_button_enabled = True
+                            st.session_state.next_page = "idv_page"
+
+                        else:
+                            result_details_str = ""
+                            st.error(f"CR Number: {cr_number} ❌")
+                            st.error(f"Business Name: {business_name} ❌")
+                            st.error(f"Business Owner: {business_owner_1} ❌")
+                            st.error(f"CR Expiry Date: {expiry_date_hijri} ❌")
+                            st.error(f"Business Address: {location} ❌")
+                            
+                    else:
+                        st.success(f"CR Number: {cr_number} ✅")
+                        st.success(f"Business Name: {business_name} ✅")
+                        st.success(f"Business Owner: {business_owner_name} ✅")
+                        if expiry_date_hijri:
+                            st.success(f"CR Expiry Date: {expiry_date_hijri} ✅")
+                        else:
+                            st.success(f"CR Expiry Date: {wathq_result['cr_expiry_date']} ✅")
+                        if location:
+                            st.success(f"Business Address: {location} ✅")
+                        else:
+                            st.success(f"Business Address: {wathq_result['address']} ✅")
+                        
+                        st.session_state.next_button_enabled = True
+                        st.session_state.next_page = "idv_page"
 
             if st.session_state.get("next_button_enabled"):
                 if st.button("Next"):
                     st.session_state.idv_response = True
             # st.session_state.next_page = "similar_web_page"
 
-            # Add a link to go back to the previous page
-            # st.markdown("Go back to [C/R Entry Page](?previous_page=cr_entry)")
 
 def display_details_in_table(details, id_number):
     df = pd.DataFrame(details, index=[f"ID{id_number}"])
@@ -462,26 +488,47 @@ def idv_page():
                 extracted_details = extract_id_details(uploaded_id_content)
                 uploaded_ids.append(extracted_details)
 
-    st.session_state.next_button_enabled = len(uploaded_ids) == num_ids_to_upload
-    if st.session_state.get("next_button_enabled"):
-        if st.button("Next"):
-            # Set the next page to "similar_web_page" (you can change this as needed)
-            st.session_state.next_page = "expense_benchmarking_page"
-            st.session_state.idv_response = True
+    if hasattr(st.session_state, 'owner_name'):
+        matching_name = st.session_state.owner_name
+
+    name_matched = any(fuzzy_match_fields(id_data.get("Name", ""), matching_name) >= 70 for id_data in uploaded_ids)
 
     with st.expander("Extracted Details"):
         for i, id_data in enumerate(uploaded_ids, start=1):
             st.subheader(f"Details from ID {i}")
             display_details_in_table(id_data, i)
 
+            # Check if the extracted name matches business owner name using fuzzy matching
+            name = id_data.get("Name", "")
+            similarity = fuzzy_match_fields(name, matching_name)
+
+            if similarity >= 70:
+                st.success("ID verified")
+            else:
+                st.warning(f"Please Upload ID of {matching_name}")
+
+    # Display the warning message outside the expander
+    if not name_matched:
+        st.warning(f"Please Upload ID of {matching_name}")
+
+    # Only display the "Next" button if the name matches business owner name
+
+    # st.session_state.next_button_enabled = name_matched
+    st.session_state.next_button_enabled = True
+
+    # Display the "Next" button below the expander
+    if st.session_state.get("next_button_enabled"):
+        if st.button("Next"):
+            # Set the next page to "similar_web_page" (you can change this as needed)
+            st.session_state.next_page = "expense_benchmarking_page"
+            st.session_state.idv_response = True
+
 def analyze_bank_statement(pdf_file):
-    time.sleep(2)
+    pdf_bytes = pdf_file.read()
+    extractor = BankExtractor()
+    result = extractor.extract(pdf_bytes=pdf_bytes)
 
-    expense = 5000
-    free_cash_flow = 10000
-    revenue = 15000
-
-    return expense, free_cash_flow, revenue
+    return result
 
 def expense_benchmarking_page():
     st.title("Revenue/Cash Flow Analysis")
@@ -490,38 +537,61 @@ def expense_benchmarking_page():
     if st.button("Submit"):
         if uploaded_file is not None:
             with st.spinner("Reading Bank Statement..."):
-                expense, free_cash_flow, revenue = analyze_bank_statement(uploaded_file)
-            
-            with st.spinner("Analyzing Results..."):
-                time.sleep(2)
-            
-            data = pd.DataFrame({
-                'Month': ['Jan', 'Feb', 'Mar', 'Apr', 'May'],
-                'Expense': [5000, 4500, 5500, 4800, 5100],
-                'Revenue': [15000, 15500, 16000, 16200, 16500],
-                'Free Cash Flow': [10000, 10500, 11000, 11200, 11500]
-            })
+                data = analyze_bank_statement(uploaded_file)
+                if not data:
+                    st.error("Please upload a valid Bank Statement")
+                else:
+                    with st.spinner("Analyzing Results..."):
+                    
+                        rev_data = data['rev_by_month']
+                        exp_data = data['exp_by_month']
+                        cash_flow_data = data['free cash flows']
 
-            fig = px.bar(data, x='Month', y=['Expense', 'Revenue', 'Free Cash Flow'], 
-                        title='Monthly Expense, Revenue, and Free Cash Flow Analysis')
+                        months = list(rev_data.keys())
 
-            fig.update_layout(
-                xaxis=dict(showgrid=False),
-                yaxis=dict(showgrid=False),
-                plot_bgcolor='white',
-                width=750,
-                height=570,
-            )
+                        rev_values = [rev_data[month] for month in months]
+                        exp_values = [abs(exp_data[month]) for month in months]
+                        cash_flow_values = [cash_flow_data[month] for month in months]
 
-            fig.update_traces(marker=dict(color='#77DD77'), selector=dict(name='Free Cash Flow'))
-            st.plotly_chart(fig)
+                        data = pd.DataFrame({
+                            'Month': months,
+                            'Revenue': rev_values,
+                            'Expense': exp_values,
+                            'Free Cash Flow': cash_flow_values
+                        })
 
-            st.session_state.next_button_enabled = True
-            st.session_state.next_page = "similar_web_page"
+                        # Modify the values to be positive
+                        data['Revenue'] = data['Revenue'].abs()
+                        data['Expense'] = data['Expense'].abs()
+                        data['Free Cash Flow'] = data['Free Cash Flow']
 
-            if st.session_state.get("next_button_enabled"):
-                if st.button("Next"):
-                    st.session_state.expense_benchmarking = True
+                        hover_template = '<b>%{y}</b><br>Negative: -%{customdata}' if data['Free Cash Flow'].min() < 0 else '<b>%{y}</b>'
+
+                        fig = px.bar(data, x='Month', y=['Revenue', 'Expense', 'Free Cash Flow'],
+                            title='Monthly Revenue, Expense, and Free Cash Flow Analysis',
+                            barmode='relative', color_discrete_map={'Free Cash Flow': 'rgba(220,0,0,0.5)',
+                                                                    'Expense': 'rgba(102,51,153,0.5)',
+                                                                    'Revenue': 'rgba(182, 208, 226,0.8)'})
+
+                        fig.update_layout(
+                            xaxis=dict(showgrid=False),
+                            yaxis=dict(showgrid=False),
+                            plot_bgcolor='white',
+                            width=750,
+                            height=570,
+                        )
+
+                        fig.update_traces(marker=dict(color=['rgba(0,215,0,0.65)' if val >= 0 else 'rgba(250,0,0,0.5)' for val in data['Free Cash Flow']]),
+                          selector=dict(name='Free Cash Flow'))
+
+                        st.plotly_chart(fig)
+
+                        st.session_state.next_button_enabled = True
+                        st.session_state.next_page = "similar_web_page"
+
+                    if st.session_state.get("next_button_enabled"):
+                        if st.button("Next"):
+                            st.session_state.expense_benchmarking = True
         else:
             st.error("Please upload a Bank statement PDF before submitting.")
 
