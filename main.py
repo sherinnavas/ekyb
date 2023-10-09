@@ -593,61 +593,59 @@ def expense_benchmarking_page():
         if uploaded_file is not None:
             with st.spinner("Reading Bank Statement..."):
                 data = analyze_bank_statement(uploaded_file)
-                if not data:
-                    st.error("Please upload a valid Bank Statement")
-                else:
-                    with st.spinner("Analyzing Results..."):
-                    
-                        rev_data = data['rev_by_month']
-                        exp_data = data['exp_by_month']
-                        cash_flow_data = data['free cash flows']
+                
+                with st.spinner("Analyzing Results..."):
+                
+                    rev_data = data['rev_by_month']
+                    exp_data = data['exp_by_month']
+                    cash_flow_data = data['free cash flows']
 
-                        months = list(rev_data.keys())
+                    months = list(rev_data.keys())
 
-                        rev_values = [rev_data[month] for month in months]
-                        exp_values = [abs(exp_data[month]) for month in months]
-                        cash_flow_values = [cash_flow_data[month] for month in months]
+                    rev_values = [rev_data[month] for month in months]
+                    exp_values = [abs(exp_data[month]) for month in months]
+                    cash_flow_values = [cash_flow_data[month] for month in months]
 
-                        data = pd.DataFrame({
-                            'Month': months,
-                            'Revenue': rev_values,
-                            'Expense': exp_values,
-                            'Free Cash Flow': cash_flow_values
-                        })
+                    data = pd.DataFrame({
+                        'Month': months,
+                        'Revenue': rev_values,
+                        'Expense': exp_values,
+                        'Free Cash Flow': cash_flow_values
+                    })
 
-                        # Modify the values to be positive
-                        data['Revenue'] = data['Revenue'].abs()
-                        data['Expense'] = data['Expense'].abs()
-                        data['Free Cash Flow'] = data['Free Cash Flow']
+                    # Modify the values to be positive
+                    data['Revenue'] = data['Revenue'].abs()
+                    data['Expense'] = data['Expense'].abs()
+                    data['Free Cash Flow'] = data['Free Cash Flow']
 
-                        hover_template = '<b>%{y}</b><br>Negative: -%{customdata}' if data['Free Cash Flow'].min() < 0 else '<b>%{y}</b>'
+                    hover_template = '<b>%{y}</b><br>Negative: -%{customdata}' if data['Free Cash Flow'].min() < 0 else '<b>%{y}</b>'
 
-                        fig = px.bar(data, x='Month', y=['Revenue', 'Expense', 'Free Cash Flow'],
-                            title='Monthly Revenue, Expense, and Free Cash Flow Analysis',
-                            barmode='relative', color_discrete_map={'Free Cash Flow': 'rgba(220,0,0,0.5)',
-                                                                    'Expense': 'rgba(102,51,153,0.5)',
-                                                                    'Revenue': 'rgba(182, 208, 226,0.8)'})
+                    fig = px.bar(data, x='Month', y=['Revenue', 'Expense', 'Free Cash Flow'],
+                        title='Monthly Revenue, Expense, and Free Cash Flow Analysis',
+                        barmode='relative', color_discrete_map={'Free Cash Flow': 'rgba(220,0,0,0.5)',
+                                                                'Expense': 'rgba(102,51,153,0.5)',
+                                                                'Revenue': 'rgba(182, 208, 226,0.8)'})
 
-                        fig.update_layout(
-                            xaxis=dict(showgrid=False),
-                            yaxis=dict(showgrid=False),
-                            plot_bgcolor='white',
-                            width=950,
-                            height=700,
-                            margin=dict(l=400),
-                        )
+                    fig.update_layout(
+                        xaxis=dict(showgrid=False),
+                        yaxis=dict(showgrid=False),
+                        plot_bgcolor='white',
+                        width=950,
+                        height=700,
+                        margin=dict(l=400),
+                    )
 
-                        fig.update_traces(marker=dict(color=['rgba(0,215,0,0.65)' if val >= 0 else 'rgba(250,0,0,0.5)' for val in data['Free Cash Flow']]),
-                          selector=dict(name='Free Cash Flow'))
+                    fig.update_traces(marker=dict(color=['rgba(0,215,0,0.65)' if val >= 0 else 'rgba(250,0,0,0.5)' for val in data['Free Cash Flow']]),
+                      selector=dict(name='Free Cash Flow'))
 
-                        st.plotly_chart(fig)
+                    st.plotly_chart(fig)
 
-                        st.session_state.next_button_enabled = True
-                        st.session_state.step += 1
+                    st.session_state.next_button_enabled = True
+                    st.session_state.step += 1
 
-                    if st.session_state.get("next_button_enabled"):
-                        if st.button("Next"):
-                            print(f"step: {st.session_state.step}")
+                if st.session_state.get("next_button_enabled"):
+                    if st.button("Next"):
+                        print(f"step: {st.session_state.step}")
         else:
             st.error("Please upload a Bank statement PDF before submitting.")
 
