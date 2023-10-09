@@ -598,7 +598,7 @@ def expense_benchmarking_page():
         if uploaded_file is not None:
             with st.spinner("Reading Bank Statement..."):
                 data = analyze_bank_statement(uploaded_file)
-                print("!!!!!!!!!!!!!!!!!!')
+                print("!!!!!!!!!!!!!!!!!!")
                 print(data)
                 if not data:
                     st.error("We do not support this bank statement format yet.")
