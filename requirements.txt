@@ -17,6 +17,7 @@ click==8.1.7
 contourpy==1.1.1
 twscrape
 opencv-python-headless
+cmake
 python-poppler
 bankstatementextractor-sau==2.1.0.0
 cycler==0.12.0
