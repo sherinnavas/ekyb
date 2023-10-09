@@ -577,6 +577,7 @@ def idv_page():
 
 def analyze_bank_statement(pdf_file):
     pdf_bytes = pdf_file.read()
+    st.write(pdf_bytes[:10])
     extractor = BankExtractor()
     result = extractor.extract(pdf_bytes=pdf_bytes)
     st.write(f"Result: {result}")
