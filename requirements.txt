@@ -1,4 +1,5 @@
 gspread
+ultralytics
 scipy
 PyPDF2
 pdfplumber
