@@ -6,7 +6,7 @@ import re
 from datetime import datetime
 from PIL import Image
 import pdfplumber
-from bankstatementextractor_sau.banks_utils import *
+from banks_utils import *
 import json
 from PyPDF2 import * # PyPDF2 library
 import os
