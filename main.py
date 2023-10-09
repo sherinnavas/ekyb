@@ -35,7 +35,7 @@ import random
 USERNAME = "demo"
 PASSWORD = "demo"
 
-# st.set_page_config(layout="wide")
+st.set_page_config(layout="wide")
 
 if 'step' not in st.session_state:
     st.session_state.step = 0
@@ -266,36 +266,52 @@ def gcloud_translate(text, src='ar', dest='en'):
 # Login Page
 def login_page():
     st.title("Login Page")
-
     # Use st.empty() to create placeholders for input fields and messages
-    username_placeholder = st.empty()
-    password_placeholder = st.empty()
-    login_status = st.empty()
-
-    username = username_placeholder.text_input("Username:")
-    password = password_placeholder.text_input("Password:", type="password")
+    placeholder = st.empty()
+    with placeholder.form("login"):
+        st.markdown("#### Enter your credentials")
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+        submit = st.form_submit_button("Login")
     
-    login_button = st.button("Login")
+    if submit and check_credentials(username, password):
+        # placeholder.empty()
+        st.session_state.step = 0
+        st.success("Login successful! Proceed to the CR verification screen.")
+        
+        st.session_state.login_page = True
+    
+    elif submit and not check_credentials(username, password):
+        st.error("Login failed. Please check your credentials.")
 
-    if login_button:
-        if check_credentials(username, password):
-            # Display a success message and set the session state variable
-            st.session_state.step = 0
-            st.session_state.login = True
-            login_status.success("Login successful! Proceed to the cr verification screen.")
+    # username_placeholder = st.empty()
+    # password_placeholder = st.empty()
+    # login_status = st.empty()
+
+    # username = username_placeholder.text_input("Username:")
+    # password = password_placeholder.text_input("Password:", type="password")
+    
+    # login_button = st.button("Login")
+
+    # if login_button:
+    #     if check_credentials(username, password):
+    #         # Display a success message and set the session state variable
+    #         st.session_state.step = 0
+    #         st.session_state.login_page = True
+    #         login_status.success("Login successful! Proceed to the cr verification screen.")
             
-        else:
-            # Display an error message
-            login_status.error("Login failed. Please check your credentials.")
+    #     else:
+    #         # Display an error message
+    #         login_status.error("Login failed. Please check your credentials.")
 
-steps = ["CR verification", "ID Verification", "Expense BenchMarking", "Web Analysis", "Address verification", "Social Checks ", "Fraud Analysis", "World Check Screening"]
+steps = ["CR verification", "ID Verification", "Expense Analysis", "Web Analysis", "Address verification", "Social Checks ", "Fraud Analysis", "World Check"]
 
 def show_progress():
     progress_html = "<div style='display: flex; justify-content: space-between; align-items: center; width: 100%;'>"
     for i, step in enumerate(steps):
         checkpoint_style = "background-color: rgba(0,255,0,0.6); font-size: 12px;" if i <= st.session_state.step else ""
         progress_html += (
-            "<div style='flex: 1; text-align: center; color: #555555; font-size: 12px; padding: 5px;'>"
+            "<div style='flex: 1; text-align: center; color: #555555; font-size: 13.5px; padding: 5px;'>"
             f"{step}</div><div style='width: 12px; height: 12px; background-color: #aaaaaa; border-radius: 50%; {checkpoint_style}'></div>"
         )
     progress_html += "</div>"
@@ -615,8 +631,9 @@ def expense_benchmarking_page():
                             xaxis=dict(showgrid=False),
                             yaxis=dict(showgrid=False),
                             plot_bgcolor='white',
-                            width=750,
-                            height=570,
+                            width=950,
+                            height=700,
+                            margin=dict(l=400),
                         )
 
                         fig.update_traces(marker=dict(color=['rgba(0,215,0,0.65)' if val >= 0 else 'rgba(250,0,0,0.5)' for val in data['Free Cash Flow']]),
@@ -815,9 +832,9 @@ def generate_fake_similar_web_data(WEB_ANALYSIS_DATA, WEB_AVERAGE_DURATION_DATA)
     avg_duration = [entry["average_visit_duration"] for entry in duration_data]
 
     # st.set_page_config(layout="wide")
-    col1, col2 = st.columns(2)
+    tab1, tab2 = st.tabs(["Traffic", "Bounce Rate"])
 
-    with col1:
+    with tab1:
         # Create the first chart for average traffic month-wise
         fig1 = px.bar(
             x=traffic_dates,
@@ -831,14 +848,15 @@ def generate_fake_similar_web_data(WEB_ANALYSIS_DATA, WEB_AVERAGE_DURATION_DATA)
             yaxis=dict(showgrid=False, gridwidth=1, range=[500, 1500], title_font=dict(size=12)),
             plot_bgcolor='white',
             font=dict(size=12),
-            width=410,
-            height=550,
+            width=950,
+            height=700,
+            margin=dict(l=350),
         )
         fig1.update_traces(marker_color='rgba(102,51,153,0.5)')
 
         st.plotly_chart(fig1)
 
-    with col2:
+    with tab2:
         # Create the second chart for average visit duration
         fig2 = px.bar(
             x=duration_dates,
@@ -852,8 +870,9 @@ def generate_fake_similar_web_data(WEB_ANALYSIS_DATA, WEB_AVERAGE_DURATION_DATA)
             yaxis=dict(showgrid=False, gridwidth=1, range=[0, 80], title_font=dict(size=12)),
             plot_bgcolor='white',
             font=dict(size=12),
-            width=410,
-            height=550,
+            width=950,
+            height=700,
+            margin=dict(l=350),
         )
         fig2.update_traces(marker_color='rgba(182, 208, 226,0.8)')  # The last value (0.5) controls transparency
         
@@ -1183,7 +1202,7 @@ def world_check():
         for _ in range(3):
             st.markdown('<p style="font-size:24px; padding-top:16px">✅</p>', unsafe_allow_html=True)
 
-if 'login' not in st.session_state:
+if 'login_page' not in st.session_state:
     login_page()
 elif st.session_state.step == 0:
     cr_entry_page()
