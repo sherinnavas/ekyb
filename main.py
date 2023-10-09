@@ -19,7 +19,6 @@ import json
 import pandas as pd
 from transformers import BertTokenizer, BertForSequenceClassification
 import torch
-# from textblob import TextBlob
 import matplotlib.pyplot as plt
 from rapidfuzz import fuzz
 from urllib.parse import urlparse
@@ -30,12 +29,16 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from bankstatementextractor_sau.BanksExtractor import *
 import random
-# from wordcloud import WordCloud
 # import numpy as np
 
 # Define fixed credentials
 USERNAME = "demo"
 PASSWORD = "demo"
+
+# st.set_page_config(layout="wide")
+
+if 'step' not in st.session_state:
+    st.session_state.step = 0
 
 # Define a function to check credentials
 def check_credentials(username, password):
@@ -110,7 +113,7 @@ def twitter_scrape(business_name):
 
     print(f"running command: {command}")
     try:
-        result = subprocess.run(
+        result = subprocess.Popen(
             command,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -118,14 +121,16 @@ def twitter_scrape(business_name):
             text=True,
         )
         # print(result)
-        print(f"stdout: {result.stdout}")
-        print(f"stderr: {result.stderr}")
+        stdout, stderr = process.communicate()
 
-        if result.returncode != 0:
-            st.error(f"Error: {result.stderr}")
+        print(f"stdout: {stdout}")
+        print(f"stderr: {stderr}")
+
+        if process.returncode != 0:
+            st.error(f"Error: {stderr}")
         else:
             try:
-                response_json = json.loads(result.stdout)
+                response_json = json.loads(stdout)
                 tweet_list = []
 
                 for entry in response_json.get("data", {}).get("search_by_raw_query", {}).get("search_timeline", {}).get("timeline", {}).get("instructions", []):
@@ -142,7 +147,7 @@ def twitter_scrape(business_name):
                 st.error(f"No tweets found")
 
     except Exception as e:
-        st.error(f"An error occurred: {str(e)}")
+        return []
 
 def instagram_scrape(business_name):
     api_url = "https://www.page2api.com/api/v1/scrape"
@@ -269,18 +274,37 @@ def login_page():
 
     username = username_placeholder.text_input("Username:")
     password = password_placeholder.text_input("Password:", type="password")
+    
     login_button = st.button("Login")
 
     if login_button:
         if check_credentials(username, password):
             # Display a success message and set the session state variable
-            login_status.success("Login successful! Proceed to the cr verification screen.")
-            st.session_state.next_page = "cr_entry"
+            st.session_state.step = 0
             st.session_state.login = True
+            login_status.success("Login successful! Proceed to the cr verification screen.")
             
         else:
             # Display an error message
             login_status.error("Login failed. Please check your credentials.")
+
+steps = ["CR verification", "ID Verification", "Expense BenchMarking", "Web Analysis", "Address verification", "Social Checks ", "Fraud Analysis", "World Check Screening"]
+
+def show_progress():
+    progress_html = "<div style='display: flex; justify-content: space-between; align-items: center; width: 100%;'>"
+    for i, step in enumerate(steps):
+        checkpoint_style = "background-color: rgba(0,255,0,0.6); font-size: 12px;" if i <= st.session_state.step else ""
+        progress_html += (
+            "<div style='flex: 1; text-align: center; color: #555555; font-size: 12px; padding: 5px;'>"
+            f"{step}</div><div style='width: 12px; height: 12px; background-color: #aaaaaa; border-radius: 50%; {checkpoint_style}'></div>"
+        )
+    progress_html += "</div>"
+    st.markdown(progress_html, unsafe_allow_html=True)
+
+# Function to display a progress bar
+def show_progress_bar():
+    progress_value = st.session_state.step / (len(steps) - 1)  # Start from 0 and go to 1
+    st.progress(progress_value)
 
 def get_response_from_wathq(cr_number):
     url = f"https://api.wathq.sa/v5/commercialregistration/fullinfo/{cr_number}"
@@ -366,6 +390,8 @@ def verify_business_details(ocr_result, wathq_result):
     return flag
 
 def cr_entry_page():
+    show_progress_bar()
+    show_progress()
     st.title("C/R - Verification")
     pdf_file = st.file_uploader("Upload a C/R Document(PDF only)", type=["pdf"])
     submit_button = st.button("Submit")
@@ -441,10 +467,10 @@ def cr_entry_page():
                                 st.success(f"Business Address: {wathq_result['address']} ✅")
 
                             st.session_state.next_button_enabled = True
-                            st.session_state.next_page = "idv_page"
+                            st.session_state.step += 1
 
                         else:
-                            result_details_str = ""
+                            st.subheader("Verification Failed")
                             st.error(f"CR Number: {cr_number} ❌")
                             st.error(f"Business Name: {business_name} ❌")
                             st.error(f"Business Owner: {business_owner_1} ❌")
@@ -452,6 +478,7 @@ def cr_entry_page():
                             st.error(f"Business Address: {location} ❌")
                             
                     else:
+                        st.subheader("Verified Details")
                         st.success(f"CR Number: {cr_number} ✅")
                         st.success(f"Business Name: {business_name} ✅")
                         st.success(f"Business Owner: {business_owner_name} ✅")
@@ -467,9 +494,12 @@ def cr_entry_page():
                         st.session_state.next_button_enabled = True
                         st.session_state.next_page = "idv_page"
 
+                        st.session_state.next_button_enabled = True
+                        st.session_state.step += 1
+
             if st.session_state.get("next_button_enabled"):
                 if st.button("Next"):
-                    st.session_state.idv_response = True
+                    print(f"step: {st.session_state.step}")
             # st.session_state.next_page = "similar_web_page"
 
 
@@ -478,6 +508,8 @@ def display_details_in_table(details, id_number):
     st.table(df)
 
 def idv_page():
+    show_progress_bar()
+    show_progress()
     st.title("Business Shareholders Verification")
     uploaded_ids = []
 
@@ -518,14 +550,14 @@ def idv_page():
     # Only display the "Next" button if the name matches business owner name
 
     # st.session_state.next_button_enabled = name_matched
-    st.session_state.next_button_enabled = True
+    st.session_state.next_button_enabled = True        
 
     # Display the "Next" button below the expander
     if st.session_state.get("next_button_enabled"):
+        st.session_state.step += 1
         if st.button("Next"):
             # Set the next page to "similar_web_page" (you can change this as needed)
-            st.session_state.next_page = "expense_benchmarking_page"
-            st.session_state.idv_response = True
+             print(f"step: {st.session_state.step}")
 
 def analyze_bank_statement(pdf_file):
     pdf_bytes = pdf_file.read()
@@ -535,6 +567,8 @@ def analyze_bank_statement(pdf_file):
     return result
 
 def expense_benchmarking_page():
+    show_progress_bar()
+    show_progress()
     st.title("Revenue/Cash Flow Analysis")
     uploaded_file = st.file_uploader("Upload Bank Statement (PDF only)", type=["pdf"])
     
@@ -591,11 +625,11 @@ def expense_benchmarking_page():
                         st.plotly_chart(fig)
 
                         st.session_state.next_button_enabled = True
-                        st.session_state.next_page = "similar_web_page"
+                        st.session_state.step += 1
 
                     if st.session_state.get("next_button_enabled"):
                         if st.button("Next"):
-                            st.session_state.expense_benchmarking = True
+                            print(f"step: {st.session_state.step}")
         else:
             st.error("Please upload a Bank statement PDF before submitting.")
 
@@ -691,6 +725,8 @@ def check_address_from_google(company_name, company_address):
             return False
 
 def address_verification_page():
+    show_progress_bar()
+    show_progress()
     st.title("Address Verification")
 
     address = st.text_input("Enter address of the business", placeholder="Eg. Al Salam Tecom Tower, Dubai Media City, UAE")
@@ -718,10 +754,11 @@ def address_verification_page():
                 st.success("Address validation     ✅")
 
                 st.session_state.next_button_enabled = True
-                st.session_state.next_page = "sentiment_scrape"
+                st.session_state.step += 1
+                # st.session_state.next_page = "sentiment_scrape"
 
                 if st.button("Next"):
-                    st.session_state.address_verification = True
+                    print(f"step: {st.session_state.step}")
             else:
                 st.error("Address verification Failed    ❌")
                 st.error("Address validation Failed      ❌")
@@ -794,11 +831,10 @@ def generate_fake_similar_web_data(WEB_ANALYSIS_DATA, WEB_AVERAGE_DURATION_DATA)
             yaxis=dict(showgrid=False, gridwidth=1, range=[500, 1500], title_font=dict(size=12)),
             plot_bgcolor='white',
             font=dict(size=12),
-            width=340,
-            height=450,
-            margin=dict(r=10),
+            width=410,
+            height=550,
         )
-        fig1.update_traces(marker_color='rgba(255, 0, 0, 0.5)')
+        fig1.update_traces(marker_color='rgba(102,51,153,0.5)')
 
         st.plotly_chart(fig1)
 
@@ -807,19 +843,19 @@ def generate_fake_similar_web_data(WEB_ANALYSIS_DATA, WEB_AVERAGE_DURATION_DATA)
         fig2 = px.bar(
             x=duration_dates,
             y=avg_duration,
-            labels={'x':'Date', 'y':'Average Visit Duration'},
-            title='Average Visit Duration Month-wise',
+            labels={'x':'Date', 'y':'Bounce Rate'},
+            title='Bounce Rate Month-wise',
         )
 
         fig2.update_layout(
             xaxis=dict(showgrid=False, gridwidth=1, title_font=dict(size=12)),
-            yaxis=dict(showgrid=False, gridwidth=1, range=[0, 1000], title_font=dict(size=12)),
+            yaxis=dict(showgrid=False, gridwidth=1, range=[0, 80], title_font=dict(size=12)),
             plot_bgcolor='white',
             font=dict(size=12),
-            width=340,
-            height=450,
+            width=410,
+            height=550,
         )
-        fig2.update_traces(marker_color='rgba(0, 0, 255, 0.5)')  # The last value (0.5) controls transparency
+        fig2.update_traces(marker_color='rgba(182, 208, 226,0.8)')  # The last value (0.5) controls transparency
         
         st.plotly_chart(fig2)
 
@@ -841,6 +877,8 @@ def get_data_from_sheet(url, sheet):
     return None, None, None
 
 def similar_web_page():
+    show_progress_bar()
+    show_progress()
     GDRIVE_CREDS = {
     "type": "service_account",
     "project_id": "st-project-387317",
@@ -894,10 +932,7 @@ def similar_web_page():
                                 duration_data = generate_fake_duration_data()
                                 save_data_to_sheet(company_url, timestamp, traffic_data, duration_data, sheet)
                             st.write(data)
-                            st.session_state.next_button_enabled = True
-                            st.session_state.next_page = "address_verification_page"
-                            if st.button("Next"):
-                                st.session_state.similar_web = True
+
                         else:
                             saved_timestamp, saved_traffic_data, saved_duration_data = get_data_from_sheet(company_url, sheet)
                             if saved_timestamp:
@@ -916,9 +951,12 @@ def similar_web_page():
                                 generate_fake_similar_web_data(traffic_data, duration_data)
 
                         st.session_state.next_button_enabled = True
-                        st.session_state.next_page = "address_verification_page"
-                        if st.button("Next"):
-                            st.session_state.similar_web = True
+                        st.session_state.step += 1
+                        # st.session_state.next_page = "address_verification_page"
+                        if st.session_state.get("next_button_enabled"):
+                            if st.button("Next"):
+                                print(f"step: {st.session_state.step}")
+
                     except Exception as e:
                         saved_timestamp, saved_traffic_data, saved_duration_data = get_data_from_sheet(company_url, sheet)
                         if saved_timestamp:
@@ -935,6 +973,14 @@ def similar_web_page():
                             duration_data = generate_fake_duration_data()
                             save_data_to_sheet(company_url, timestamp, traffic_data, duration_data, sheet)
                             generate_fake_similar_web_data(traffic_data, duration_data)
+                    
+                        st.session_state.next_button_enabled = True
+                        st.session_state.step += 1
+                        # st.session_state.next_page = "address_verification_page"
+                        if st.session_state.get("next_button_enabled"):
+                            if st.button("Next"):
+                                print(f"step: {st.session_state.step}")
+
             else:
                 st.error("Please enter a valid URL")
         else:
@@ -951,7 +997,7 @@ def generate_fake_traffic_data():
 # Call this function to generate fake duration data
 def generate_fake_duration_data():
     duration_dates = pd.date_range(start="2023-01-01", end="2023-08-01", freq="MS")
-    duration_data = [{"date": str(date), "average_visit_duration": random.uniform(200, 1000)} for date in duration_dates]
+    duration_data = [{"date": str(date), "average_visit_duration": f"{round(random.uniform(0, 30),2)}%"} for date in duration_dates]
     return duration_data
 
 
@@ -974,6 +1020,8 @@ def calculate_overall_sentiment(prob1, prob2, prob3):
     return avg_prob, overall_sentiment
 
 def sentiment_scrape():
+    show_progress_bar()
+    show_progress()
     st.title("Social Check Result")
 
     if st.button("Get Analysis"):
@@ -1037,7 +1085,7 @@ def sentiment_scrape():
                 font=dict(size=17, color="green")
             )
             fig.add_annotation(
-                text=f"<b>Negative:</b> {int((1 - avg_prob) * 100)}%",
+                text=f"<b>Negative:</b> {int((1 - avg_prob) * 100)+1}%",
                 xref="paper", yref="paper",
                 x=0.15, y=0.85,
                 showarrow=False,
@@ -1072,13 +1120,15 @@ def sentiment_scrape():
             st.plotly_chart(fig)
 
             st.session_state.next_button_enabled = True
-            st.session_state.next_page = "thm_verification"
-
-            if st.button("Next"):
-                st.session_state.thm_verification = True
-
+            st.session_state.step += 1
+            # st.session_state.next_page = "address_verification_page"
+            if st.session_state.get("next_button_enabled"):
+                if st.button("Next"):
+                    print(f"step: {st.session_state.step}")
 
 def thm_verification():
+    show_progress_bar()
+    show_progress()
     st.title("Fraud Analysis")
     with st.spinner("Identifying Device.."):
         time.sleep(1)
@@ -1109,12 +1159,15 @@ def thm_verification():
                 st.write("Is Bot:", THM_RESPONSE["bot_detection"]["is_bot"])
 
             st.session_state.next_button_enabled = True
-            st.session_state.next_page = "world_check"
-            
-            if st.button("Next"):
-                st.session_state.world_check = True
+            st.session_state.step += 1
+            # st.session_state.next_page = "address_verification_page"
+            if st.session_state.get("next_button_enabled"):
+                if st.button("Next"):
+                    print(f"step: {st.session_state.step}")
 
 def world_check():
+    show_progress_bar()
+    show_progress()
     st.title("World Check Results")
 
     with st.spinner("Extracting Results.."):
@@ -1130,52 +1183,21 @@ def world_check():
         for _ in range(3):
             st.markdown('<p style="font-size:24px; padding-top:16px">✅</p>', unsafe_allow_html=True)
 
-
-def navigate():
-    if st.session_state.next_page == "cr_entry":
-        cr_entry_page()
-    elif st.session_state.next_page == "idv_page":
-        idv_page()
-    elif st.session_state.next_page == "expense_benchmarking_page":
-        expense_benchmarking_page()
-    elif st.session_state.next_page == "similar_web_page":
-        similar_web_page()
-    elif st.session_state.next_page == "address_verification_page":
-        address_verification_page()
-    elif st.session_state.next_page == "sentiment_scrape":
-        sentiment_scrape()
-    elif st.session_state.next_page == "thm_verification":
-        thm_verification()
-    elif st.session_state.next_page == "world_check":
-        world_check()
-    else:
-        login_page()
-
-# Main Streamlit app
-def main():
-    if not hasattr(st.session_state, "next_page"):
-        st.session_state.next_page = "login"
-
-    if not hasattr(st.session_state, "login"):
-        st.session_state.login = False
-    if not hasattr(st.session_state, "wathq_response"):
-        st.session_state.wathq_response = False
-    if not hasattr(st.session_state, "idv_response"):
-        st.session_state.idv_response = False
-    if not hasattr(st.session_state, "expense_benchmarking"):
-        st.session_state.expense_benchmarking = False
-    if not hasattr(st.session_state, "similar_web"):
-        st.session_state.similar_web = False
-    if not hasattr(st.session_state, "sentiment_scrape"):
-        st.session_state.sentiment_scrape = False
-    if not hasattr(st.session_state, "thm_verification"):
-        st.session_state.thm_verification = False
-    if not hasattr(st.session_state, "world_check"):
-        st.session_state.world_check = False
-    if not hasattr(st.session_state, "next_button_enabled"):
-        st.session_state.next_button_enabled = False
-
-    navigate()
-
-if __name__ == "__main__":
-    main()
+if 'login' not in st.session_state:
+    login_page()
+elif st.session_state.step == 0:
+    cr_entry_page()
+elif st.session_state.step == 1:
+    idv_page()
+elif st.session_state.step == 2:
+    expense_benchmarking_page()
+elif st.session_state.step == 3:
+    similar_web_page()
+elif st.session_state.step == 4:
+    address_verification_page()
+elif st.session_state.step == 5:
+    sentiment_scrape()
+elif st.session_state.step == 6:
+    thm_verification()
+elif st.session_state.step == 7:
+    world_check()
