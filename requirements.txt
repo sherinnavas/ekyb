@@ -1,5 +1,6 @@
 gspread
 oauth2client
+pip==23.2.1
 aiohttp==3.8.5
 aiosignal==1.3.1
 aiosqlite==0.17.0
