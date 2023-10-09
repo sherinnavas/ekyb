@@ -18,7 +18,7 @@ contourpy==1.1.1
 twscrape
 opencv-python-headless
 cmake
-python-poppler
+python-poppler==0.4.1
 bankstatementextractor-sau==2.1.0.0
 cycler==0.12.0
 fake-useragent
