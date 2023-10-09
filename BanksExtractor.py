@@ -5,11 +5,11 @@ import numpy as np
 import re
 from datetime import datetime
 from PIL import Image
-from bankstatementextractor_sau.banks_utils import *
-from bankstatementextractor_sau.banks import Banks
+from banks_utils import *
+from banks import Banks
 #from pdf2image import convert_from_bytes
 import fitz
-import bankstatementextractor_sau.constants as const
+import constants1 as const
 
 import os
 import subprocess
@@ -132,7 +132,7 @@ class BankExtractor:
         # print(f"img arr: {img_byte_array}")
 
         # Load the YOLOv5 model
-        model_path = pkg_resources.resource_filename('bankstatementextractor_sau', 'models/best.pt')
+        model_path = 'best.pt'
         model = torch.hub.load('ultralytics/yolov5', 'custom', path=model_path)
 
         # Load the image from the bytes-like object
