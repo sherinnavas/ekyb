@@ -1,4 +1,8 @@
 gspread
+scipy
+PyPDF2
+pdfplumber
+scikit-learn
 oauth2client
 aiohttp==3.8.5
 aiosignal==1.3.1
