@@ -16,7 +16,7 @@ charset-normalizer==3.3.0
 click==8.1.7
 contourpy==1.1.1
 twscrape
-opencv-python-headless
+opencv-contrib-python
 ultralytics
 bankstatementextractor-sau==2.3.0.0
 cycler==0.12.0
