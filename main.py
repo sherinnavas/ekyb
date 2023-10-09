@@ -144,7 +144,7 @@ def twitter_scrape(business_name):
                 return tweet_list
 
             except json.JSONDecodeError as e:
-                st.error(f"No tweets found")
+                return []
 
     except Exception as e:
         return []
@@ -436,14 +436,14 @@ def cr_entry_page():
                 business_details_container.empty()
 
                 # Display the new business details
-                st.subheader("Extracted Details from CR:")
-                st.write(f"CR Number: {cr_number}")
-                st.write(f"Business Name: {business_name}")
-                st.write(f"Business Owner: {business_owner_1}")
-                if expiry_date_hijri:
-                    st.write(f"CR Expiry Date: {expiry_date_hijri}")
-                if location:
-                    st.write(f"Business Address: {location}")
+                with st.expander("Extracted Details from CR"):
+                    st.write(f"CR Number: {cr_number}")
+                    st.write(f"Business Name: {business_name}")
+                    st.write(f"Business Owner: {business_owner_1}")
+                    if expiry_date_hijri:
+                        st.write(f"CR Expiry Date: {expiry_date_hijri}")
+                    if location:
+                        st.write(f"Business Address: {location}")
             
                 with st.spinner("Verifying Details..."):
                     cr_number = ocr_result['cr_number']
