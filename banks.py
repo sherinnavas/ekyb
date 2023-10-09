@@ -196,12 +196,14 @@ class Banks:
     def riyadh_1(self,pdf_file_path):
         try:
             # Read the PDF file using pdfplumber
-            with pdfplumber.open(pdf_file_path) as pdf:
-                plain_text_data = []
-                for page in pdf.pages:
-                    page_text = page.extract_text()
-                    page_text_blocks = page_text.split('\n')
-                    plain_text_data.append(page_text_blocks)
+            pdf_document = PdfReader(io.BytesIO(pdf_file_path))
+            # print('after reading bytes')
+            plain_text_data = []
+
+            for page in pdf_document.pages:
+                page_text = page.extract_text()
+                page_text_blocks = page_text.split('\n')
+                plain_text_data.append(page_text_blocks)
 
             # Account information
             if plain_text_data[-1][0] == 'CUSTOMER STATEMENT':
@@ -320,6 +322,7 @@ class Banks:
 
         except Exception as e:
             return {'error': str(e)}
+        
     
     def aljazira_1(self,pdf_file_path):
         try:
