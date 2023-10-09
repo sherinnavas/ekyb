@@ -27,7 +27,7 @@ def is_pdf(pdf_bytes):
 
 
 def gcloud_translate(text, src='ar', dest='en'):
-    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "./creds/streamlit-connection-b1a38b694505.json"
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "streamlit-connection-b1a38b694505 (1).json"
     translate_client = translate.Client()
     results = translate_client.translate(text, source_language=src, target_language=dest)
     translated_texts = [result['translatedText'] for result in results]
