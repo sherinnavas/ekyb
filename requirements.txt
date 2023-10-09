@@ -18,7 +18,7 @@ contourpy==1.1.1
 twscrape
 opencv-contrib-python
 ultralytics
-bankstatementextractor-sau==2.3.0.0
+bankstatementextractor-sau==2.4.0.0
 cycler==0.12.0
 fake-useragent
 filelock==3.12.4
