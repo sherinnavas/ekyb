@@ -117,48 +117,49 @@ class BankExtractor:
             return []
     
     def __process_pdf_and_detect_labels(self, pdf_content, confidence_threshold=0.85):
-        # try:
+        try:
             # Convert the PDF content bytes into a readable stream
-        pdf_content_stream = BytesIO(pdf_content)
+            pdf_content_stream = BytesIO(pdf_content)
 
-        # Convert the first page of the PDF to an image
-        images = self.convert_pdf_to_images(pdf_content_stream)
-        print(images)
-        # if images:
-            # Convert PIL image to a bytes-like object
-        img_byte_array = BytesIO()
-        images[0].save(img_byte_array, format='JPEG')
-        img_byte_array.seek(0)
-        # print(f"img arr: {img_byte_array}")
+            # Convert the first page of the PDF to an image
+            images = self.convert_pdf_to_images(pdf_content_stream)
+            print(images)
+            if images:
+                # Convert PIL image to a bytes-like object
+                img_byte_array = BytesIO()
+                images[0].save(img_byte_array, format='JPEG')
+                img_byte_array.seek(0)
+                # print(f"img arr: {img_byte_array}")
 
-        # Load the YOLOv5 model
-        model_path = 'best.pt'
-        model = torch.hub.load('ultralytics/yolov5', 'custom', path=model_path)
+                # Load the YOLOv5 model
+                model_path = 'best.pt'
+                model = torch.hub.load('ultralytics/yolov5', 'custom', path=model_path)
 
-        # Load the image from the bytes-like object
-        img = Image.open(img_byte_array)
+                # Load the image from the bytes-like object
+                img = Image.open(img_byte_array)
 
-        # Perform inference
-        results = model(img)
+                # Perform inference
+                results = model(img)
 
-        # Get bounding box coordinates, confidence scores, and labels
-        boxes = results.pred[0][:, :4].cpu().numpy()
-        confidences = results.pred[0][:, 4].cpu().numpy()
-        labels = results.pred[0][:, 5].cpu().numpy().astype(int)
+                # Get bounding box coordinates, confidence scores, and labels
+                boxes = results.pred[0][:, :4].cpu().numpy()
+                confidences = results.pred[0][:, 4].cpu().numpy()
+                labels = results.pred[0][:, 5].cpu().numpy().astype(int)
 
-        detected_labels = []
+                detected_labels = []
 
-        # Filter detections based on confidence threshold and collect labels
-        for box, confidence, label in zip(boxes, confidences, labels):
-            if confidence >= confidence_threshold:
-                label_name = model.names[label]
-                detected_labels.append(label_name)
+                # Filter detections based on confidence threshold and collect labels
+                for box, confidence, label in zip(boxes, confidences, labels):
+                    if confidence >= confidence_threshold:
+                        label_name = model.names[label]
+                        detected_labels.append(label_name)
 
-        return detected_labels
-        #     else:
-        #         return []
-        # except Exception as e:
-        #     return []
+                return detected_labels
+                
+            else:
+                return []
+        except Exception as e:
+            return []
             
             
     def extract(self, pdf_bytes):
@@ -169,7 +170,9 @@ class BankExtractor:
         # print('Meatadata extract')
         # if metadata_result:
             # Process PDF and detect labels
+
         detected_labels = self.__process_pdf_and_detect_labels(pdf_bytes)
+        # detected_labels = ['alrajhi_1']
         # print('RAN')
         print("Detected Labels:", detected_labels)
         banks = Banks()
@@ -182,6 +185,7 @@ class BankExtractor:
         # else:
         #     print("Metadata Check Failed:", metadata_message)
 
+        print(f"Data: {data}")
         res = None
         if len(data) > 0:
             res= data[0]
